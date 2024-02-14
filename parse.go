@@ -306,7 +306,7 @@ func (p *Parser) parseTerm() (n Node, err error) {
 }
 
 func (p *Parser) parseCompare() (n Node, err error) {
-	n, err = p.parsePostfix()
+	n, err = p.parseTerm()
 	if err != nil {
 		return
 	}
@@ -331,7 +331,7 @@ func (p *Parser) parseCompare() (n Node, err error) {
 	}
 
 	p.consume()
-	r, err := p.parsePostfix()
+	r, err := p.parseTerm()
 	if err != nil {
 		return
 	}
