@@ -19,4 +19,22 @@ const (
 	pushAttr
 	emitSubprog
 	pushSubprog
+	emitCompare
+	pushCompare
+	jump
+	jumpTrue
+	jumpFalse
+	emitPop
+	discardPop
+	pushNot
+	emitNot
+)
+
+const (
+	EQ = iota
+	NE
+	GT
+	GE
+	LT
+	LE
 )

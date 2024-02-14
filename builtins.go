@@ -34,6 +34,45 @@ func BuiltinMap(args []Value) (Value, error) {
 	return mapped, nil
 }
 
+func filterNOP(args []Value) (Value, error) {
+	return BoolValue(false), nil
+}
+
+func BuiltinFilter(args []Value) (Value, error) {
+	values, err := GetArg(args, 0, ListValue{}).List()
+	if err != nil {
+		return nil, err
+	}
+	fn := GetArg(args, 1, FuncValue(filterNOP))
+
+	filtered := []Value{}
+	for _, value := range values {
+		ok, err := fn.Call([]Value{value})
+		if err != nil {
+			return nil, err
+		}
+		if ok.Bool() {
+			filtered = append(filtered, value)
+		}
+	}
+
+	return ListValue(filtered), nil
+}
+
+func BuiltinReverse(args []Value) (Value, error) {
+	values, err := GetArg(args, 0, ListValue{}).List()
+	if err != nil {
+		return nil, err
+	}
+
+	reversed := make(ListValue, len(values))
+	for i := 0; i < len(values); i++ {
+		reversed[len(values)-i-1] = values[i]
+	}
+
+	return reversed, nil
+}
+
 func BuiltinJoin(args []Value) (Value, error) {
 	value, err := GetArg(args, 0, ListValue{}).List()
 	if err != nil {
@@ -65,6 +104,9 @@ func BuiltinList(args []Value) (Value, error) {
 
 func AddBuiltins(c *Context) {
 	c.Declare("map", FuncValue(BuiltinMap))
+	c.Declare("filter", FuncValue(BuiltinFilter))
 	c.Declare("join", FuncValue(BuiltinJoin))
 	c.Declare("list", FuncValue(BuiltinList))
+	c.Declare("true", BoolValue(true))
+	c.Declare("false", BoolValue(false))
 }

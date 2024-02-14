@@ -10,17 +10,123 @@ type ValueKind int
 
 const (
 	KindString ValueKind = iota
+	KindBool
+	KindNumber
 	KindList
 	KindObject
 	KindFunction
 )
 
+const (
+	KindStringName   = "string"
+	KindBoolName     = "bool"
+	KindNumberName   = "number"
+	KindListName     = "list"
+	KindObjectName   = "object"
+	KindFunctionName = "function"
+)
+
+func (v ValueKind) String() string {
+	s := ""
+	switch v {
+	case KindString:
+		s = KindStringName
+	case KindBool:
+		s = KindBoolName
+	case KindNumber:
+		s = KindNumberName
+	case KindList:
+		s = KindListName
+	case KindObject:
+		s = KindObjectName
+	case KindFunction:
+		s = KindFunctionName
+	}
+	return s
+}
+
 type Value interface {
 	Kind() ValueKind
+	Bool() bool
+	Number() (float64, error)
 	String() (string, error)
 	List() ([]Value, error)
 	GetAttr(name string) (Value, bool)
 	Call(args []Value) (Value, error)
+}
+
+type ErrType struct {
+	From string
+	To   string
+}
+
+func (e *ErrType) Error() string {
+	return fmt.Sprintf("type error: can not convert %s to %s", e.From, e.To)
+}
+
+type BoolValue bool
+
+var _ Value = BoolValue(false)
+
+func (b BoolValue) Kind() ValueKind {
+	return KindBool
+}
+
+func (b BoolValue) Bool() bool {
+	return bool(b)
+}
+
+func (b BoolValue) Number() (float64, error) {
+	if b {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+func (b BoolValue) String() (string, error) {
+	return fmt.Sprint(bool(b)), nil
+}
+
+func (b BoolValue) List() ([]Value, error) {
+	return []Value{b}, nil
+}
+
+func (b BoolValue) GetAttr(name string) (Value, bool) {
+	return nil, false
+}
+
+func (b BoolValue) Call(args []Value) (Value, error) {
+	return b, nil
+}
+
+type NumberValue float64
+
+func (n NumberValue) Kind() ValueKind {
+	return KindNumber
+}
+
+func (n NumberValue) Bool() bool {
+	return n != 0
+}
+
+func (n NumberValue) Number() (float64, error) {
+	return float64(n), nil
+}
+
+func (n NumberValue) String() (string, error) {
+	return fmt.Sprint(float64(n)), nil
+}
+
+func (n NumberValue) List() ([]Value, error) {
+	return []Value{n}, nil
+}
+
+func (n NumberValue) GetAttr(name string) (Value, bool) {
+	return nil, false
+}
+
+func (n NumberValue) Call(args []Value) (Value, error) {
+	return n, nil
 }
 
 type StringValue string
@@ -29,6 +135,14 @@ var _ Value = StringValue("")
 
 func (s StringValue) Kind() ValueKind {
 	return KindString
+}
+
+func (s StringValue) Bool() bool {
+	return len(s) > 0
+}
+
+func (s StringValue) Number() (float64, error) {
+	return strconv.ParseFloat(string(s), 64)
 }
 
 func (s StringValue) String() (string, error) {
@@ -53,6 +167,14 @@ var _ Value = ListValue{}
 
 func (l ListValue) Kind() ValueKind {
 	return KindList
+}
+
+func (l ListValue) Bool() bool {
+	return len(l) > 0
+}
+
+func (l ListValue) Number() (float64, error) {
+	return 0, &ErrType{KindListName, KindNumberName}
 }
 
 func (l ListValue) String() (string, error) {
@@ -99,6 +221,14 @@ func (o ObjectValue) Kind() ValueKind {
 	return KindObject
 }
 
+func (o ObjectValue) Bool() bool {
+	return len(o) > 0
+}
+
+func (o ObjectValue) Number() (float64, error) {
+	return 0, &ErrType{KindObjectName, KindNumberName}
+}
+
 func (o ObjectValue) String() (string, error) {
 	sb := strings.Builder{}
 	first := true
@@ -138,6 +268,14 @@ var _ Value = FuncValue(nil)
 
 func (f FuncValue) Kind() ValueKind {
 	return KindFunction
+}
+
+func (f FuncValue) Number() (float64, error) {
+	return 0, &ErrType{KindFunctionName, KindNumberName}
+}
+
+func (f FuncValue) Bool() bool {
+	return true
 }
 
 func (f FuncValue) String() (string, error) {
@@ -186,6 +324,14 @@ func (s *subprogValue) eval(args []Value) (Value, error) {
 
 func (s *subprogValue) Kind() ValueKind {
 	return KindFunction
+}
+
+func (s *subprogValue) Bool() bool {
+	return true
+}
+
+func (s *subprogValue) Number() (float64, error) {
+	return 0, &ErrType{KindFunctionName, KindNumberName}
 }
 
 func (s *subprogValue) String() (string, error) {
@@ -402,6 +548,46 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 				return err
 			}
 			stack = append(stack, value)
+		case emitCompare:
+			value, err = evalCompare(c, &stack, instr)
+			if err != nil {
+				return err
+			}
+			err = wr.WriteValue(value)
+			if err != nil {
+				return err
+			}
+		case pushCompare:
+			value, err = evalCompare(c, &stack, instr)
+			if err != nil {
+				return err
+			}
+			stack = append(stack, value)
+		case jump:
+			ip += instr.iarg
+		case jumpTrue:
+			if peek(stack).Bool() {
+				ip += instr.iarg
+			}
+		case jumpFalse:
+			if !peek(stack).Bool() {
+				ip += instr.iarg
+			}
+		case emitPop:
+			err = wr.WriteValue(pop(&stack))
+			if err != nil {
+				return err
+			}
+		case discardPop:
+			pop(&stack)
+		case pushNot:
+			stack = append(stack, BoolValue(!pop(&stack).Bool()))
+		case emitNot:
+			value = BoolValue(!pop(&stack).Bool())
+			err = wr.WriteValue(value)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -444,6 +630,15 @@ func evalSubprog(c *Context, stack *[]Value, instr Instr) (value Value, err erro
 	return
 }
 
+func evalCompare(c *Context, stack *[]Value, instr Instr) (value Value, err error) {
+	args := (*stack)[len(*stack)-2:]
+	*stack = (*stack)[:len(*stack)-2]
+
+	ok, err := compareValues(args[0], args[1], instr.iarg)
+	value = BoolValue(ok)
+	return
+}
+
 type stringBuilder struct {
 	b strings.Builder
 }
@@ -464,4 +659,112 @@ func EvalString(c *Context, code []Instr) (string, error) {
 	b := stringBuilder{}
 	err := Eval(c, code, &b)
 	return b.String(), err
+}
+
+func compareValues(a, b Value, cmp int) (ok bool, err error) {
+
+	if a.Kind() != b.Kind() {
+		switch cmp {
+		case NE:
+			return true, nil
+		default:
+			return false, nil
+		}
+	}
+
+	switch a.Kind() {
+	case KindString:
+		l, err := a.String()
+		if err != nil {
+			return ok, err
+		}
+		r, err := b.String()
+		if err != nil {
+			return ok, err
+		}
+		switch cmp {
+		case EQ:
+			ok = l == r
+		case NE:
+			ok = l != r
+		case GT:
+			ok = l > r
+		case GE:
+			ok = l >= r
+		case LT:
+			ok = l < r
+		case LE:
+			ok = l <= r
+		}
+		return ok, nil
+	case KindBool:
+		switch cmp {
+		case EQ:
+			ok = a.Bool() == b.Bool()
+		case NE:
+			ok = a.Bool() != b.Bool()
+		}
+		return
+	case KindNumber:
+		l, err := a.Number()
+		if err != nil {
+			return ok, err
+		}
+		r, err := b.Number()
+		if err != nil {
+			return ok, err
+		}
+		switch cmp {
+		case GT:
+			ok = l > r
+		case GE:
+			ok = l >= r
+		case EQ:
+			ok = l == r
+		case NE:
+			ok = l != r
+		case LE:
+			ok = l <= r
+		case LT:
+			ok = l < r
+		}
+		return ok, nil
+	case KindList:
+		switch cmp {
+		case EQ:
+			ok = a == b
+		case NE:
+			ok = a != b
+		}
+		return
+	case KindObject:
+		switch cmp {
+		case EQ:
+			ok = a == b
+		case NE:
+			ok = a != b
+		}
+		return
+	case KindFunction:
+		switch cmp {
+		case EQ:
+			ok = a == b
+		case NE:
+			ok = a != b
+		}
+		return
+	default:
+		return
+	}
+}
+
+func peek(stack []Value) Value {
+	value := stack[len(stack)-1]
+	return value
+}
+
+func pop(stack *[]Value) Value {
+	value := (*stack)[len(*stack)-1]
+	*stack = (*stack)[:len(*stack)-1]
+	return value
 }

@@ -35,3 +35,17 @@ type SubprogNode struct {
 	Args []string
 	Prog Node
 }
+
+type CompareNode struct {
+	Compare int
+	Left    Node
+	Right   Node
+}
+
+type AndNode struct {
+	Exprs []Node
+}
+
+type OrNode struct {
+	Exprs []Node
+}

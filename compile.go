@@ -88,6 +88,15 @@ func (c *CompileContext) Attr(mode int, name string) {
 	}
 }
 
+func (c *CompileContext) Compare(mode int, cmp int) {
+	switch mode {
+	case CompileEmit:
+		c.PushInstr(emitCompare, cmp, "")
+	case CompilePush:
+		c.PushInstr(pushCompare, cmp, "")
+	}
+}
+
 func (c *CompileContext) Compile() (code []Instr, ctx Context) {
 	code = c.code
 	ctx = NewContext()
@@ -145,5 +154,75 @@ func (n *SubprogNode) Compile(ctx *CompileContext, mode int) error {
 	}
 
 	ctx.Subprog(mode, index)
+	return nil
+}
+
+func (n *CompareNode) Compile(ctx *CompileContext, mode int) error {
+	err := n.Left.Compile(ctx, CompilePush)
+	if err != nil {
+		return err
+	}
+	err = n.Right.Compile(ctx, CompilePush)
+	if err != nil {
+		return err
+	}
+
+	ctx.Compare(mode, n.Compare)
+	return nil
+}
+
+func (n *AndNode) Compile(ctx *CompileContext, mode int) error {
+	jumpLabels := []int{}
+	lastIdx := len(n.Exprs) - 1
+
+	for i, n := range n.Exprs {
+		err := n.Compile(ctx, CompilePush)
+		if err != nil {
+			return err
+		}
+
+		if i != lastIdx {
+			jumpLabels = append(jumpLabels, len(ctx.code))
+			ctx.PushInstr(jumpFalse, 0, "")
+			ctx.PushInstr(discardPop, 0, "")
+		}
+	}
+
+	for _, lb := range jumpLabels {
+		ctx.code[lb].iarg = len(ctx.code) - lb - 1
+	}
+
+	switch mode {
+	case CompileEmit:
+		ctx.PushInstr(emitPop, 0, "")
+	}
+	return nil
+}
+
+func (n *OrNode) Compile(ctx *CompileContext, mode int) error {
+	jumpLabels := []int{}
+	lastIdx := len(n.Exprs) - 1
+
+	for i, n := range n.Exprs {
+		err := n.Compile(ctx, CompilePush)
+		if err != nil {
+			return err
+		}
+
+		if i != lastIdx {
+			jumpLabels = append(jumpLabels, len(ctx.code))
+			ctx.PushInstr(jumpTrue, 0, "")
+			ctx.PushInstr(discardPop, 0, "")
+		}
+	}
+
+	for _, lb := range jumpLabels {
+		ctx.code[lb].iarg = len(ctx.code) - lb - 1
+	}
+
+	switch mode {
+	case CompileEmit:
+		ctx.PushInstr(emitPop, 0, "")
+	}
 	return nil
 }

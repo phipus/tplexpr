@@ -20,6 +20,14 @@ const (
 	TokenString
 	TokenArrow
 	TokenDeclare
+	TokenGT
+	TokenGE
+	TokenEQ
+	TokenNE
+	TokenLE
+	TokenLT
+	TokenAND
+	TokenOR
 	TokenError
 )
 
@@ -164,12 +172,21 @@ beginScan:
 			t.Type = TokenComma
 			return
 		case c == '=':
-			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '>' {
+			switch {
+			case s.pos+1 >= len(s.input):
+				// nop
+			case s.input[s.pos+1] == '>':
 				s.pos += 2
 				t.End = s.pos
 				t.Type = TokenArrow
 				return
+			case s.input[s.pos+1] == '=':
+				s.pos += 2
+				t.End = s.pos
+				t.Type = TokenEQ
+				return
 			}
+
 			t.End = s.pos
 			t.Type = TokenError
 			s.Err = s.errUnexpectedInput()
@@ -179,6 +196,59 @@ beginScan:
 				s.pos += 2
 				t.End = s.pos
 				t.Type = TokenDeclare
+				return
+			}
+			t.End = s.pos
+			t.Type = TokenError
+			s.Err = s.errUnexpectedInput()
+			return
+		case c == '>':
+			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '=' {
+				s.pos += 2
+				t.Type = TokenGT
+			} else {
+				s.pos += 1
+				t.Type = TokenGE
+			}
+			t.End = s.pos
+			return
+		case c == '<':
+			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '=' {
+				s.pos += 2
+				t.Type = TokenLE
+			} else {
+				s.pos += 1
+				t.Type = TokenLT
+			}
+			t.End = s.pos
+			return
+		case c == '!':
+			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '=' {
+				s.pos += 2
+				t.End = s.pos
+				t.Type = TokenNE
+				return
+			}
+			t.End = s.pos
+			t.Type = TokenError
+			s.Err = s.errUnexpectedInput()
+			return
+		case c == '&':
+			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '&' {
+				s.pos += 2
+				t.End = s.pos
+				t.Type = TokenAND
+				return
+			}
+			t.End = s.pos
+			t.Type = TokenError
+			s.Err = s.errUnexpectedInput()
+			return
+		case c == '|':
+			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '|' {
+				s.pos += 2
+				t.End = s.pos
+				t.Type = TokenOR
 				return
 			}
 			t.End = s.pos

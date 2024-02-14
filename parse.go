@@ -257,8 +257,105 @@ func (p *Parser) parseArgList() (args []Node, err error) {
 	return
 }
 
+func (p *Parser) parseCompare() (n Node, err error) {
+	n, err = p.parsePostfix()
+	if err != nil {
+		return
+	}
+
+	t := p.getToken()
+	cmp := 0
+	switch t.Type {
+	case TokenGT:
+		cmp = GT
+	case TokenGE:
+		cmp = GE
+	case TokenEQ:
+		cmp = EQ
+	case TokenNE:
+		cmp = NE
+	case TokenLE:
+		cmp = LE
+	case TokenLT:
+		cmp = LT
+	default:
+		return
+	}
+
+	p.consume()
+	r, err := p.parsePostfix()
+	if err != nil {
+		return
+	}
+
+	n = &CompareNode{cmp, n, r}
+	return
+}
+
+func (p *Parser) parseAND() (n Node, err error) {
+	n, err = p.parseCompare()
+	if err != nil {
+		return
+	}
+
+	nodes := []Node{n}
+
+	for {
+		t := p.getToken()
+		if t.Type != TokenAND {
+			break
+		}
+		p.consume()
+
+		n, err = p.parseCompare()
+		if err != nil {
+			return
+		}
+
+		nodes = append(nodes, n)
+	}
+
+	if len(nodes) > 1 {
+		n = &AndNode{nodes}
+	} else {
+		n = nodes[0]
+	}
+	return
+}
+
+func (p *Parser) parseOR() (n Node, err error) {
+	n, err = p.parseAND()
+	if err != nil {
+		return
+	}
+
+	nodes := []Node{n}
+
+	for {
+		t := p.getToken()
+		if t.Type != TokenOR {
+			break
+		}
+		p.consume()
+
+		n, err = p.parseAND()
+		if err != nil {
+			return
+		}
+
+		nodes = append(nodes, n)
+	}
+
+	if len(nodes) > 1 {
+		n = &OrNode{nodes}
+	} else {
+		n = nodes[0]
+	}
+	return
+}
+
 func (p *Parser) ParseExpr() (n Node, err error) {
-	return p.parsePostfix()
+	return p.parseOR()
 }
 
 func (p *Parser) Parse() (n Node, err error) {

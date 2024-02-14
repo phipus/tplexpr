@@ -18,12 +18,20 @@ func _() {
 	_ = x[TokenString-7]
 	_ = x[TokenArrow-8]
 	_ = x[TokenDeclare-9]
-	_ = x[TokenError-10]
+	_ = x[TokenGT-10]
+	_ = x[TokenGE-11]
+	_ = x[TokenEQ-12]
+	_ = x[TokenNE-13]
+	_ = x[TokenLE-14]
+	_ = x[TokenLT-15]
+	_ = x[TokenAND-16]
+	_ = x[TokenOR-17]
+	_ = x[TokenError-18]
 }
 
-const _TokenType_name = "ValueIdentLeftParenRightParenDotCommaEOFStringArrowDeclareError"
+const _TokenType_name = "ValueIdentLeftParenRightParenDotCommaEOFStringArrowDeclareGTGEEQNELELTANDORError"
 
-var _TokenType_index = [...]uint8{0, 5, 10, 19, 29, 32, 37, 40, 46, 51, 58, 63}
+var _TokenType_index = [...]uint8{0, 5, 10, 19, 29, 32, 37, 40, 46, 51, 58, 60, 62, 64, 66, 68, 70, 73, 75, 80}
 
 func (i TokenType) String() string {
 	if i < 0 || i >= TokenType(len(_TokenType_index)-1) {

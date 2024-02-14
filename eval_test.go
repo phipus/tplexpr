@@ -28,6 +28,15 @@ func TestEval(t *testing.T) {
 				},
 			},
 		},
+		{}, // empty value
+		{`${"" || ""}`, "", nil},
+		{`${"" || "Hello"}`, "Hello", nil},
+		{`${"Hello" || "World"}`, "Hello", nil},
+		{`${"Hello" || ""}`, "Hello", nil},
+		{`${"" && ""}`, "", nil},
+		{`${"" && "Hello"}`, "", nil},
+		{`${"Hello" && "World"}`, "World", nil},
+		{`${"Hello" && ""}`, "", nil},
 	}
 
 	for i := range testCases {
