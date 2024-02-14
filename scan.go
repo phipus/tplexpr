@@ -28,6 +28,10 @@ const (
 	TokenLT
 	TokenAND
 	TokenOR
+	TokenADD
+	TokenSUB
+	TokenMUL
+	TokenDIV
 	TokenError
 )
 
@@ -254,6 +258,26 @@ beginScan:
 			t.End = s.pos
 			t.Type = TokenError
 			s.Err = s.errUnexpectedInput()
+			return
+		case c == '+':
+			s.pos += 1
+			t.End = s.pos
+			t.Type = TokenADD
+			return
+		case c == '-':
+			s.pos += 1
+			t.End = s.pos
+			t.Type = TokenSUB
+			return
+		case c == '*':
+			s.pos += 1
+			t.End = s.pos
+			t.Type = TokenMUL
+			return
+		case c == '/':
+			s.pos += 1
+			t.End = s.pos
+			t.Type = TokenDIV
 			return
 		case c == '"', c == '\'':
 			s.pos += 1

@@ -26,10 +26,13 @@ const (
 	jumpFalse
 	emitPop
 	discardPop
-	pushNot
 	emitNot
+	pushNot
+	emitBinaryOP
+	pushBinaryOP
 )
 
+// Compare constants
 const (
 	EQ = iota
 	NE
@@ -37,4 +40,12 @@ const (
 	GE
 	LT
 	LE
+)
+
+// Binary OP Constatns
+const (
+	ADD = iota
+	SUB
+	MUL
+	DIV
 )

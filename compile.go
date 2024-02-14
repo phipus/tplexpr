@@ -97,6 +97,15 @@ func (c *CompileContext) Compare(mode int, cmp int) {
 	}
 }
 
+func (c *CompileContext) BinaryOP(mode int, op int) {
+	switch mode {
+	case CompileEmit:
+		c.PushInstr(emitBinaryOP, op, "")
+	case CompilePush:
+		c.PushInstr(pushBinaryOP, op, "")
+	}
+}
+
 func (c *CompileContext) Compile() (code []Instr, ctx Context) {
 	code = c.code
 	ctx = NewContext()
@@ -223,6 +232,30 @@ func (n *OrNode) Compile(ctx *CompileContext, mode int) error {
 	switch mode {
 	case CompileEmit:
 		ctx.PushInstr(emitPop, 0, "")
+	}
+	return nil
+}
+
+func (n *BinaryOPNode) Compile(ctx *CompileContext, mode int) error {
+	if len(n.Ops) == 0 {
+		return n.Expr.Compile(ctx, mode)
+	}
+
+	err := n.Expr.Compile(ctx, CompilePush)
+	if err != nil {
+		return err
+	}
+	lastIndex := len(n.Ops) - 1
+	for i, op := range n.Ops {
+		err := op.Expr.Compile(ctx, CompilePush)
+		if err != nil {
+			return err
+		}
+		if i == lastIndex {
+			ctx.BinaryOP(mode, op.Op)
+		} else {
+			ctx.BinaryOP(CompilePush, op.Op)
+		}
 	}
 	return nil
 }

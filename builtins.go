@@ -98,6 +98,17 @@ func BuiltinJoin(args []Value) (Value, error) {
 	return StringValue(sb.String()), nil
 }
 
+func BuiltinBool(args []Value) (Value, error) {
+	value := GetArg(args, 0, StringValue(""))
+	return BoolValue(value.Bool()), nil
+}
+
+func BuiltinNumber(args []Value) (Value, error) {
+	value := GetArg(args, 0, StringValue(""))
+	n, err := value.Number()
+	return NumberValue(n), err
+}
+
 func BuiltinList(args []Value) (Value, error) {
 	return ListValue(args), nil
 }
@@ -109,4 +120,6 @@ func AddBuiltins(c *Context) {
 	c.Declare("list", FuncValue(BuiltinList))
 	c.Declare("true", BoolValue(true))
 	c.Declare("false", BoolValue(false))
+	c.Declare("bool", FuncValue(BuiltinBool))
+	c.Declare("number", FuncValue(BuiltinNumber))
 }

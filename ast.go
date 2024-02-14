@@ -49,3 +49,13 @@ type AndNode struct {
 type OrNode struct {
 	Exprs []Node
 }
+
+type BinaryOP struct {
+	Op   int
+	Expr Node
+}
+
+type BinaryOPNode struct {
+	Expr Node
+	Ops  []BinaryOP
+}

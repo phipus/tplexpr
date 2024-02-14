@@ -257,6 +257,54 @@ func (p *Parser) parseArgList() (args []Node, err error) {
 	return
 }
 
+func (p *Parser) parseBinaryOP(defs map[TokenType]int, next func() (Node, error)) (n Node, err error) {
+	n, err = next()
+	if err != nil {
+		return
+	}
+
+	ops := []BinaryOP{}
+
+	for {
+		t := p.getToken()
+		op, ok := defs[t.Type]
+		if !ok {
+			break
+		}
+
+		p.consume()
+
+		e, err := next()
+		if err != nil {
+			return nil, err
+		}
+		ops = append(ops, BinaryOP{op, e})
+	}
+
+	if len(ops) > 0 {
+		n = &BinaryOPNode{n, ops}
+	}
+	return
+}
+
+var factorDefs = map[TokenType]int{
+	TokenMUL: MUL,
+	TokenDIV: DIV,
+}
+
+func (p *Parser) parseFactor() (n Node, err error) {
+	return p.parseBinaryOP(factorDefs, p.parsePostfix)
+}
+
+var termDefs = map[TokenType]int{
+	TokenADD: ADD,
+	TokenDIV: DIV,
+}
+
+func (p *Parser) parseTerm() (n Node, err error) {
+	return p.parseBinaryOP(termDefs, p.parseFactor)
+}
+
 func (p *Parser) parseCompare() (n Node, err error) {
 	n, err = p.parsePostfix()
 	if err != nil {
