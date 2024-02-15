@@ -12,6 +12,7 @@ type TokenType int
 const (
 	TokenValue TokenType = iota
 	TokenIdent
+	TokenNumber
 	TokenLeftParen
 	TokenRightParen
 	TokenDot
@@ -333,24 +334,43 @@ beginScan:
 					}
 				}
 			}
-		case isIdentByte(c):
+		case isIdentStartByte(c):
 			value := []byte{c}
 			s.pos += 1
 
-		readIdent:
 			for s.pos < len(s.input) {
 				c = s.input[s.pos]
-				switch {
-				case isIdentByte(c):
+
+				if isIdentByte(c) {
 					s.pos += 1
 					value = append(value, c)
-				default:
-					break readIdent
+				} else {
+					break
 				}
 			}
 
 			t.End = s.pos
 			t.Type = TokenIdent
+			t.Value = value
+			return
+
+		case isNumberStartByte(c):
+			value := []byte{c}
+			s.pos += 1
+
+			for s.pos < len(s.input) {
+				c = s.input[s.pos]
+
+				if isNumberByte(c) {
+					s.pos += 1
+					value = append(value, c)
+				} else {
+					break
+				}
+			}
+
+			t.End = s.pos
+			t.Type = TokenNumber
 			t.Value = value
 			return
 		default:
@@ -383,6 +403,33 @@ func (s *Scanner) errUnexpectedInput() error {
 func isIdentByte(c byte) bool {
 	switch {
 	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_':
+		return true
+	default:
+		return false
+	}
+}
+
+func isIdentStartByte(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c == '_':
+		return true
+	default:
+		return false
+	}
+}
+
+func isNumberByte(c byte) bool {
+	switch {
+	case c >= '0' && c <= '9', c == '.', c == 'e', c == 'E', c == '+', c == '-':
+		return true
+	default:
+		return false
+	}
+}
+
+func isNumberStartByte(c byte) bool {
+	switch {
+	case c >= '0' && c <= '9', c == '+', c == '-':
 		return true
 	default:
 		return false

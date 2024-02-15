@@ -10,32 +10,33 @@ func _() {
 	var x [1]struct{}
 	_ = x[TokenValue-0]
 	_ = x[TokenIdent-1]
-	_ = x[TokenLeftParen-2]
-	_ = x[TokenRightParen-3]
-	_ = x[TokenDot-4]
-	_ = x[TokenComma-5]
-	_ = x[TokenEOF-6]
-	_ = x[TokenString-7]
-	_ = x[TokenArrow-8]
-	_ = x[TokenDeclare-9]
-	_ = x[TokenGT-10]
-	_ = x[TokenGE-11]
-	_ = x[TokenEQ-12]
-	_ = x[TokenNE-13]
-	_ = x[TokenLE-14]
-	_ = x[TokenLT-15]
-	_ = x[TokenAND-16]
-	_ = x[TokenOR-17]
-	_ = x[TokenADD-18]
-	_ = x[TokenSUB-19]
-	_ = x[TokenMUL-20]
-	_ = x[TokenDIV-21]
-	_ = x[TokenError-22]
+	_ = x[TokenNumber-2]
+	_ = x[TokenLeftParen-3]
+	_ = x[TokenRightParen-4]
+	_ = x[TokenDot-5]
+	_ = x[TokenComma-6]
+	_ = x[TokenEOF-7]
+	_ = x[TokenString-8]
+	_ = x[TokenArrow-9]
+	_ = x[TokenDeclare-10]
+	_ = x[TokenGT-11]
+	_ = x[TokenGE-12]
+	_ = x[TokenEQ-13]
+	_ = x[TokenNE-14]
+	_ = x[TokenLE-15]
+	_ = x[TokenLT-16]
+	_ = x[TokenAND-17]
+	_ = x[TokenOR-18]
+	_ = x[TokenADD-19]
+	_ = x[TokenSUB-20]
+	_ = x[TokenMUL-21]
+	_ = x[TokenDIV-22]
+	_ = x[TokenError-23]
 }
 
-const _TokenType_name = "ValueIdentLeftParenRightParenDotCommaEOFStringArrowDeclareGTGEEQNELELTANDORADDSUBMULDIVError"
+const _TokenType_name = "ValueIdentNumberLeftParenRightParenDotCommaEOFStringArrowDeclareGTGEEQNELELTANDORADDSUBMULDIVError"
 
-var _TokenType_index = [...]uint8{0, 5, 10, 19, 29, 32, 37, 40, 46, 51, 58, 60, 62, 64, 66, 68, 70, 73, 75, 78, 81, 84, 87, 92}
+var _TokenType_index = [...]uint8{0, 5, 10, 16, 25, 35, 38, 43, 46, 52, 57, 64, 66, 68, 70, 72, 74, 76, 79, 81, 84, 87, 90, 93, 98}
 
 func (i TokenType) String() string {
 	if i < 0 || i >= TokenType(len(_TokenType_index)-1) {

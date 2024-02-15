@@ -59,3 +59,7 @@ type BinaryOPNode struct {
 	Expr Node
 	Ops  []BinaryOP
 }
+
+type NumberNode struct {
+	Value string
+}

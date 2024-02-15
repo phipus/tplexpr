@@ -653,6 +653,15 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 				return err
 			}
 			stack = append(stack, value)
+		case emitNumber:
+			value = evalNumber(c, instr)
+			err = wr.WriteValue(value)
+			if err != nil {
+				return err
+			}
+		case pushNumber:
+			value = evalNumber(c, instr)
+			stack = append(stack, value)
 		}
 	}
 	return nil
@@ -706,6 +715,12 @@ func evalBinaryOP(c *Context, stack *[]Value, instr Instr) (value Value, err err
 	args := popn(stack, 2)
 
 	value, err = binaryOPValues(args[0], args[1], instr.iarg)
+	return
+}
+
+func evalNumber(c *Context, instr Instr) (value Value) {
+	number, _ := strconv.ParseFloat(instr.sarg, 64) // error was tested during parsing
+	value = NumberValue(number)
 	return
 }
 

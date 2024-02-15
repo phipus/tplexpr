@@ -30,6 +30,8 @@ const (
 	pushNot
 	emitBinaryOP
 	pushBinaryOP
+	emitNumber
+	pushNumber
 )
 
 // Compare constants

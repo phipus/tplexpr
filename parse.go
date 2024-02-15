@@ -1,6 +1,9 @@
 package tplexpr
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 type Parser struct {
 	s         Scanner
@@ -70,6 +73,12 @@ func (p *Parser) parseAtom() (n Node, err error) {
 		p.consume()
 		subp := NewParser(t.Value)
 		n, err = subp.Parse()
+		return
+	case TokenNumber:
+		p.consume()
+		value := string(t.Value)
+		_, err = strconv.ParseFloat(value, 64)
+		n = &NumberNode{value}
 		return
 	case TokenLeftParen:
 		// find the matching closing paren

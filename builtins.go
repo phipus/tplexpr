@@ -1,7 +1,6 @@
 package tplexpr
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -26,7 +25,7 @@ func BuiltinMap(args []Value) (Value, error) {
 	fn := GetArg(args, 1, FuncValue(mapNOP))
 	mapped := make(ListValue, len(values))
 	for i, v := range values {
-		mapped[i], err = fn.Call([]Value{v, StringValue(fmt.Sprint(v))})
+		mapped[i], err = fn.Call([]Value{v, NumberValue(i)})
 		if err != nil {
 			return nil, err
 		}

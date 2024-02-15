@@ -106,6 +106,15 @@ func (c *CompileContext) BinaryOP(mode int, op int) {
 	}
 }
 
+func (c *CompileContext) Number(mode int, value string) {
+	switch mode {
+	case CompileEmit:
+		c.PushInstr(emitNumber, 0, value)
+	case CompilePush:
+		c.PushInstr(pushNumber, 0, value)
+	}
+}
+
 func (c *CompileContext) Compile() (code []Instr, ctx Context) {
 	code = c.code
 	ctx = NewContext()
@@ -257,5 +266,10 @@ func (n *BinaryOPNode) Compile(ctx *CompileContext, mode int) error {
 			ctx.BinaryOP(CompilePush, op.Op)
 		}
 	}
+	return nil
+}
+
+func (n *NumberNode) Compile(ctx *CompileContext, mode int) error {
+	ctx.Number(mode, n.Value)
 	return nil
 }

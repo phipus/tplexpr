@@ -39,6 +39,7 @@ func TestEval(t *testing.T) {
 		{`${"Hello" && ""}`, "", nil},
 		{`${"1".number() + "2".number()}`, "3", nil},
 		{`${"1" + "2"}`, "12", nil},
+		{`${2 + 2 / 4}`, "2.5", nil},
 	}
 
 	for i := range testCases {
