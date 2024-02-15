@@ -40,6 +40,17 @@ func TestEval(t *testing.T) {
 		{`${"1".number() + "2".number()}`, "3", nil},
 		{`${"1" + "2"}`, "12", nil},
 		{`${2 + 2 / 4}`, "2.5", nil},
+		{`${declare(name, "Sina")}Hello $name`, "Hello Sina", nil},
+		{`${declare(name, "Sina") "Hello $name"}`, "Hello Sina", nil},
+		{`${declare(name, "Sina") %}  Hello $name`, "Hello Sina", nil},
+		{`${list("a", "b", "c", "1")}`, "a b c 1", nil},
+		{`${for x in list("1", "2", "3") do "$x" endfor}`, "123", nil},
+		{`${template(tpl, name)}Hello $name${endtemplate}`, "", nil},
+		{`${template(tpl, name)}Hello $name${endtemplate}${tpl("World")}`, "Hello World", nil},
+		{`${if false then "A" elseif true then "B" else "C" endif}`, "B", nil},
+		{`${if true then "A" elseif true then "B" else "C" endif}`, "A", nil},
+		{`${if true then "A" elseif false then "B" else "C" endif}`, "A", nil},
+		{`${if false then "A" elseif false then "B" else "C" endif}`, "C", nil},
 	}
 
 	for i := range testCases {
@@ -74,7 +85,7 @@ func TestEval(t *testing.T) {
 		}
 
 		if result != testCase.result {
-			t.Errorf("expected %s, got %s", testCase.result, result)
+			t.Errorf("expected '%s', got '%s'", testCase.result, result)
 		}
 	}
 }

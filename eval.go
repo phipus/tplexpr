@@ -53,7 +53,7 @@ type Value interface {
 	List() ([]Value, error)
 	Keys() []string
 	GetAttr(name string) (Value, bool)
-	Call(args []Value) (Value, error)
+	Call(args Args, wr ValueWriter) error
 }
 
 const (
@@ -113,8 +113,8 @@ func (b BoolValue) GetAttr(name string) (Value, bool) {
 	return nil, false
 }
 
-func (b BoolValue) Call(args []Value) (Value, error) {
-	return b, nil
+func (b BoolValue) Call(args Args, wr ValueWriter) error {
+	return wr.WriteValue(b)
 }
 
 type NumberValue float64
@@ -147,8 +147,8 @@ func (n NumberValue) GetAttr(name string) (Value, bool) {
 	return nil, false
 }
 
-func (n NumberValue) Call(args []Value) (Value, error) {
-	return n, nil
+func (n NumberValue) Call(args Args, wr ValueWriter) error {
+	return wr.WriteValue(n)
 }
 
 type StringValue string
@@ -183,8 +183,8 @@ func (s StringValue) GetAttr(name string) (Value, bool) {
 	return nil, false
 }
 
-func (s StringValue) Call(args []Value) (Value, error) {
-	return s, nil
+func (s StringValue) Call(args Args, wr ValueWriter) error {
+	return wr.WriteValue(s)
 }
 
 type ListValue []Value
@@ -243,8 +243,8 @@ func (l ListValue) GetAttr(name string) (Value, bool) {
 	return nil, false
 }
 
-func (l ListValue) Call(args []Value) (Value, error) {
-	return l, nil
+func (l ListValue) Call(args Args, wr ValueWriter) error {
+	return wr.WriteValue(l)
 }
 
 type ObjectValue map[string]Value
@@ -300,11 +300,11 @@ func (o ObjectValue) GetAttr(name string) (v Value, ok bool) {
 	return
 }
 
-func (o ObjectValue) Call(args []Value) (Value, error) {
-	return o, nil
+func (o ObjectValue) Call(args Args, wr ValueWriter) error {
+	return wr.WriteValue(o)
 }
 
-type FuncValue func(args []Value) (Value, error)
+type FuncValue func(args Args) (Value, error)
 
 var _ Value = FuncValue(nil)
 
@@ -321,7 +321,7 @@ func (f FuncValue) Bool() bool {
 }
 
 func (f FuncValue) String() (string, error) {
-	value, err := f(nil)
+	value, err := f(Args{})
 	if err != nil {
 		return "", err
 	}
@@ -329,7 +329,7 @@ func (f FuncValue) String() (string, error) {
 }
 
 func (f FuncValue) List() ([]Value, error) {
-	value, err := f(nil)
+	value, err := f(Args{})
 	if err != nil {
 		return nil, err
 	}
@@ -344,8 +344,12 @@ func (f FuncValue) GetAttr(name string) (Value, bool) {
 	return nil, false
 }
 
-func (f FuncValue) Call(args []Value) (Value, error) {
-	return f(args)
+func (f FuncValue) Call(args Args, wr ValueWriter) error {
+	value, err := f(args)
+	if err != nil {
+		return err
+	}
+	return wr.WriteValue(value)
 }
 
 type subprogValue struct {
@@ -356,16 +360,26 @@ type subprogValue struct {
 
 var _ Value = &subprogValue{}
 
-func (s *subprogValue) eval(args []Value) (Value, error) {
+func (s *subprogValue) eval(args Args, wr ValueWriter) error {
 	s.ctx.BeginScope()
 	defer s.ctx.EndScope()
 
 	for i, argName := range s.args {
-		s.ctx.Declare(argName, GetArg(args, i, StringValue("")))
+		s.ctx.Declare(argName, args.ArgDefault(i, StringValue("")))
 	}
 
-	str, err := EvalString(s.ctx, s.code)
-	return StringValue(str), err
+	return Eval(s.ctx, s.code, wr)
+}
+
+func (s *subprogValue) evalString(args Args) (string, error) {
+	s.ctx.BeginScope()
+	defer s.ctx.EndScope()
+
+	for i, argName := range s.args {
+		s.ctx.Declare(argName, args.ArgDefault(i, StringValue("")))
+	}
+
+	return EvalString(s.ctx, s.code)
 }
 
 func (s *subprogValue) Kind() ValueKind {
@@ -381,19 +395,19 @@ func (s *subprogValue) Number() (float64, error) {
 }
 
 func (s *subprogValue) String() (string, error) {
-	value, err := s.eval(nil)
+	value, err := s.evalString(Args{})
 	if err != nil {
 		return "", err
 	}
-	return value.String()
+	return value, nil
 }
 
 func (s *subprogValue) List() ([]Value, error) {
-	value, err := s.eval(nil)
+	value, err := s.evalString(Args{})
 	if err != nil {
 		return nil, err
 	}
-	return value.List()
+	return ListValue{StringValue(value)}, nil
 }
 
 func (s *subprogValue) Keys() []string {
@@ -404,8 +418,8 @@ func (s *subprogValue) GetAttr(name string) (Value, bool) {
 	return nil, false
 }
 
-func (s *subprogValue) Call(args []Value) (Value, error) {
-	return s.eval(args)
+func (s *subprogValue) Call(args Args, wr ValueWriter) error {
+	return s.eval(args, wr)
 }
 
 type Subprog struct {
@@ -419,6 +433,7 @@ type Context struct {
 	scope      int
 	prevScopes []int
 	subprogs   []Subprog
+	iters      []evalIter
 	NameError  func(name string) (Value, error)
 }
 
@@ -499,11 +514,36 @@ func (c *Context) EndScope() {
 	c.prevScopes = c.prevScopes[:len(c.prevScopes)-1]
 }
 
+type evalIter interface {
+	Next() (Value, bool, error)
+}
+
+type listIter struct {
+	list []Value
+}
+
+func (l *listIter) Next() (Value, bool, error) {
+	if len(l.list) > 0 {
+		v := l.list[0]
+		l.list = l.list[1:]
+		return v, true, nil
+	}
+	return nil, false, nil
+}
+
 type ValueWriter interface {
 	WriteValue(v Value) error
 }
 
 func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
+	openScopes := 0
+	defer func() {
+		for openScopes > 0 {
+			c.EndScope()
+			openScopes--
+		}
+	}()
+
 	ip := 0
 	var (
 		stack []Value
@@ -538,36 +578,29 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 			}
 			stack = append(stack, value)
 		case emitCall:
-			value, err = evalCall(c, &stack, instr)
-			if err != nil {
-				return err
-			}
-			err = wr.WriteValue(value)
+			err = evalCall(c, &stack, instr, wr)
 			if err != nil {
 				return err
 			}
 		case pushCall:
-			value, err = evalCall(c, &stack, instr)
+			retBuilder := returnValueBuilder{}
+			err = evalCall(c, &stack, instr, &retBuilder)
 			if err != nil {
 				return err
 			}
-			stack = append(stack, value)
+			stack = append(stack, retBuilder.Value())
 		case emitCallDyn:
-			value, err = evalCallDyn(c, &stack, instr)
-			if err != nil {
-				return err
-			}
-			err = wr.WriteValue(value)
+			err = evalCallDyn(c, &stack, instr, wr)
 			if err != nil {
 				return err
 			}
 		case pushCallDyn:
-			value, err = evalCallDyn(c, &stack, instr)
+			retBuilder := returnValueBuilder{}
+			err = evalCallDyn(c, &stack, instr, &retBuilder)
 			if err != nil {
 				return err
 			}
-			stack = append(stack, value)
-
+			stack = append(stack, retBuilder.Value())
 		case emitAttr:
 			value, err = evalAttr(c, &stack, instr)
 			if err != nil {
@@ -630,6 +663,12 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 			}
 		case discardPop:
 			pop(&stack)
+		case storePop:
+			value := pop(&stack)
+			c.Assign(instr.sarg, value)
+		case declarePop:
+			value := pop(&stack)
+			c.Declare(instr.sarg, value)
 		case pushNot:
 			stack = append(stack, BoolValue(!pop(&stack).Bool()))
 		case emitNot:
@@ -662,28 +701,52 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 		case pushNumber:
 			value = evalNumber(c, instr)
 			stack = append(stack, value)
+		case pushIter:
+			value := pop(&stack)
+			lst, err := value.List()
+			if err != nil {
+				return err
+			}
+			c.iters = append(c.iters, &listIter{lst})
+		case iterNextOrJump:
+			ok := false
+			value, ok, err = c.iters[len(c.iters)-1].Next()
+			if err != nil {
+				return
+			}
+			if ok {
+				c.Assign(instr.sarg, value)
+			} else {
+				ip += instr.iarg
+			}
+		case discardIter:
+			c.iters = c.iters[:len(c.iters)-1]
+		case beginScope:
+			c.BeginScope()
+			openScopes++
+		case endScope:
+			c.EndScope()
+			openScopes--
 		}
 	}
 	return nil
 }
 
-func evalCall(c *Context, stack *[]Value, instr Instr) (value Value, err error) {
+func evalCall(c *Context, stack *[]Value, instr Instr, wr ValueWriter) (err error) {
 	args := popn(stack, instr.iarg)
 
-	value, err = c.Lookup(instr.sarg)
+	value, err := c.Lookup(instr.sarg)
 	if err != nil {
 		return
 	}
-	value, err = value.Call(args)
-	return
+	return value.Call(Args{args}, wr)
 }
 
-func evalCallDyn(c *Context, stack *[]Value, instr Instr) (value Value, err error) {
+func evalCallDyn(c *Context, stack *[]Value, instr Instr, wr ValueWriter) (err error) {
 	allArgs := (*stack)[len(*stack)-instr.iarg-1:]
 	*stack = (*stack)[:len(*stack)-instr.iarg-1]
 
-	value, err = allArgs[0].Call(allArgs[1:])
-	return
+	return allArgs[0].Call(Args{allArgs[1:]}, wr)
 }
 
 func evalAttr(c *Context, stack *[]Value, instr Instr) (value Value, err error) {
@@ -738,6 +801,52 @@ func (b *stringBuilder) WriteValue(v Value) error {
 
 func (b *stringBuilder) String() string {
 	return b.b.String()
+}
+
+type returnValueBuilder struct {
+	hasValue bool
+	value    Value
+	sb       strings.Builder
+}
+
+func (w *returnValueBuilder) WriteValue(v Value) error {
+	if !w.hasValue {
+		w.value = v
+		w.hasValue = true
+		return nil
+	}
+
+	if w.value != nil {
+		str, err := w.value.String()
+		w.value = nil
+		if err != nil {
+			return err
+		}
+		w.sb.WriteString(str)
+	}
+
+	str, err := v.String()
+	if err != nil {
+		return err
+	}
+	w.sb.WriteString(str)
+	return nil
+}
+
+func (w *returnValueBuilder) Value() Value {
+	if !w.hasValue {
+		return StringValue("")
+	}
+	if w.value != nil {
+		return w.value
+	}
+	return StringValue(w.sb.String())
+}
+
+func Call(v Value, args []Value) (Value, error) {
+	wr := returnValueBuilder{}
+	err := v.Call(Args{args}, &wr)
+	return wr.Value(), err
 }
 
 func EvalString(c *Context, code []Instr) (string, error) {

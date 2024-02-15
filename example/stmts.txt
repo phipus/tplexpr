@@ -1,0 +1,15 @@
+${template hello (name)}
+Hello $name
+${endtemplate}
+
+${
+    if name then
+        hello(name)
+    else
+        hello("World")
+    endif
+}
+
+${for x in items}
+Hello $x
+${endfor}

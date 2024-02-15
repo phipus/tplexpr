@@ -33,6 +33,19 @@ const (
 	TokenSUB
 	TokenMUL
 	TokenDIV
+	TokenTemplate
+	TokenEndTemplate
+	TokenIf
+	TokenThen
+	TokenElse
+	TokenElseIf
+	TokenEndIf
+	TokenFor
+	TokenIn
+	TokenDo
+	TokenBreak
+	TokenContinue
+	TokenEndFor
 	TokenError
 )
 
@@ -48,6 +61,23 @@ const (
 	scanExpr
 	scanVar
 )
+
+var keywordMap = map[string]TokenType{
+	"template":    TokenTemplate,
+	"endtemplate": TokenEndTemplate,
+	"if":          TokenIf,
+	"then":        TokenThen,
+	"else":        TokenElse,
+	"elseif":      TokenElseIf,
+	"endif":       TokenEndIf,
+	"for":         TokenFor,
+	"in":          TokenIn,
+	"do":          TokenDo,
+	"break":       TokenBreak,
+	"continue":    TokenContinue,
+	"endfor":      TokenEndFor,
+	"declare":     TokenDeclare,
+}
 
 var (
 	ErrSyntax = errors.New("syntax error")
@@ -151,32 +181,47 @@ beginScan:
 		}
 
 		c := s.input[s.pos]
-		switch {
-		case c == '}':
+		switch c {
+		case '}':
 			s.pos += 1
 			s.mode = scanValue
 			goto beginScan
-		case c == '(':
+
+		case '%':
+			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '}' {
+				s.pos += 2
+				s.mode = scanValue
+
+				for s.pos < len(s.input) && unicode.IsSpace(rune(s.input[s.pos])) {
+					s.pos += 1
+				}
+				goto beginScan
+			}
+			t.End = s.pos
+			t.Type = TokenError
+			s.Err = s.errUnexpectedInput()
+			return
+		case '(':
 			s.pos += 1
 			t.End = s.pos
 			t.Type = TokenLeftParen
 			return
-		case c == ')':
+		case ')':
 			s.pos += 1
 			t.End = s.pos
 			t.Type = TokenRightParen
 			return
-		case c == '.':
+		case '.':
 			s.pos += 1
 			t.End = s.pos
 			t.Type = TokenDot
 			return
-		case c == ',':
+		case ',':
 			s.pos += 1
 			t.End = s.pos
 			t.Type = TokenComma
 			return
-		case c == '=':
+		case '=':
 			switch {
 			case s.pos+1 >= len(s.input):
 				// nop
@@ -196,18 +241,7 @@ beginScan:
 			t.Type = TokenError
 			s.Err = s.errUnexpectedInput()
 			return
-		case c == ':':
-			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '=' {
-				s.pos += 2
-				t.End = s.pos
-				t.Type = TokenDeclare
-				return
-			}
-			t.End = s.pos
-			t.Type = TokenError
-			s.Err = s.errUnexpectedInput()
-			return
-		case c == '>':
+		case '>':
 			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '=' {
 				s.pos += 2
 				t.Type = TokenGT
@@ -217,7 +251,7 @@ beginScan:
 			}
 			t.End = s.pos
 			return
-		case c == '<':
+		case '<':
 			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '=' {
 				s.pos += 2
 				t.Type = TokenLE
@@ -227,7 +261,7 @@ beginScan:
 			}
 			t.End = s.pos
 			return
-		case c == '!':
+		case '!':
 			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '=' {
 				s.pos += 2
 				t.End = s.pos
@@ -238,7 +272,7 @@ beginScan:
 			t.Type = TokenError
 			s.Err = s.errUnexpectedInput()
 			return
-		case c == '&':
+		case '&':
 			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '&' {
 				s.pos += 2
 				t.End = s.pos
@@ -249,7 +283,7 @@ beginScan:
 			t.Type = TokenError
 			s.Err = s.errUnexpectedInput()
 			return
-		case c == '|':
+		case '|':
 			if s.pos+1 < len(s.input) && s.input[s.pos+1] == '|' {
 				s.pos += 2
 				t.End = s.pos
@@ -260,27 +294,27 @@ beginScan:
 			t.Type = TokenError
 			s.Err = s.errUnexpectedInput()
 			return
-		case c == '+':
+		case '+':
 			s.pos += 1
 			t.End = s.pos
 			t.Type = TokenADD
 			return
-		case c == '-':
+		case '-':
 			s.pos += 1
 			t.End = s.pos
 			t.Type = TokenSUB
 			return
-		case c == '*':
+		case '*':
 			s.pos += 1
 			t.End = s.pos
 			t.Type = TokenMUL
 			return
-		case c == '/':
+		case '/':
 			s.pos += 1
 			t.End = s.pos
 			t.Type = TokenDIV
 			return
-		case c == '"', c == '\'':
+		case '"', '\'':
 			s.pos += 1
 			quote := c
 			esc := false
@@ -334,46 +368,55 @@ beginScan:
 					}
 				}
 			}
-		case isIdentStartByte(c):
-			value := []byte{c}
-			s.pos += 1
 
-			for s.pos < len(s.input) {
-				c = s.input[s.pos]
-
-				if isIdentByte(c) {
-					s.pos += 1
-					value = append(value, c)
-				} else {
-					break
-				}
-			}
-
-			t.End = s.pos
-			t.Type = TokenIdent
-			t.Value = value
-			return
-
-		case isNumberStartByte(c):
-			value := []byte{c}
-			s.pos += 1
-
-			for s.pos < len(s.input) {
-				c = s.input[s.pos]
-
-				if isNumberByte(c) {
-					s.pos += 1
-					value = append(value, c)
-				} else {
-					break
-				}
-			}
-
-			t.End = s.pos
-			t.Type = TokenNumber
-			t.Value = value
-			return
 		default:
+			if isIdentStartByte(c) {
+				value := []byte{c}
+				s.pos += 1
+
+				for s.pos < len(s.input) {
+					c = s.input[s.pos]
+
+					if isIdentByte(c) {
+						s.pos += 1
+						value = append(value, c)
+					} else {
+						break
+					}
+				}
+
+				// check if we have a keyword
+				if tt, ok := keywordMap[string(value)]; ok {
+					t.Type = tt
+				} else {
+					t.Type = TokenIdent
+				}
+
+				t.End = s.pos
+				t.Value = value
+				return
+			}
+			if isNumberStartByte(c) {
+				value := []byte{c}
+				s.pos += 1
+
+				for s.pos < len(s.input) {
+					c = s.input[s.pos]
+
+					if isNumberByte(c) {
+						s.pos += 1
+						value = append(value, c)
+					} else {
+						break
+					}
+				}
+
+				t.End = s.pos
+				t.Type = TokenNumber
+				t.Value = value
+				return
+			}
+
 			t.End = s.pos
 			t.Type = TokenError
 			s.Err = s.errUnexpectedInput()

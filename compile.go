@@ -1,8 +1,9 @@
 package tplexpr
 
 type CompileContext struct {
-	code     []Instr
-	subprogs []Subprog
+	code      []Instr
+	subprogs  []Subprog
+	loopJumps *[]loopJump
 }
 
 func NewCompileContext() CompileContext {
@@ -16,6 +17,10 @@ const (
 
 func (c *CompileContext) setCode(code []Instr) {
 	c.code = code
+}
+
+func (c *CompileContext) setLoopJumps(loopJumps *[]loopJump) {
+	c.loopJumps = loopJumps
 }
 
 func (c *CompileContext) PushInstr(op, iarg int, sarg string) {
@@ -50,6 +55,12 @@ func (c *CompileContext) WithSubprog(args []string, f func() error) (int, error)
 	}
 
 	return c.pushSubprog(args, c.code), nil
+}
+
+func (c *CompileContext) WithLoopJumps(loopJumps *[]loopJump, f func() error) error {
+	defer c.setLoopJumps(c.loopJumps)
+	c.loopJumps = loopJumps
+	return f()
 }
 
 func (c *CompileContext) Var(mode int, name string) {
@@ -271,5 +282,151 @@ func (n *BinaryOPNode) Compile(ctx *CompileContext, mode int) error {
 
 func (n *NumberNode) Compile(ctx *CompileContext, mode int) error {
 	ctx.Number(mode, n.Value)
+	return nil
+}
+
+func (n *TemplateNode) Compile(ctx *CompileContext, mode int) error {
+	subprog, err := ctx.WithSubprog(n.Args, func() error {
+		for _, n := range n.Body {
+			err := n.Compile(ctx, CompileEmit)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	ctx.Subprog(CompilePush, subprog)
+	ctx.PushInstr(declarePop, 0, n.Name)
+	return nil
+}
+
+func (n *IfNode) Compile(ctx *CompileContext, mode int) (err error) {
+	const (
+		labelNextBranchStart = iota
+		labelEnd
+	)
+
+	type jumpLabel struct {
+		idx    int
+		branch int
+		label  int
+	}
+
+	jumpLabels := []jumpLabel{}
+	branchStarts := make([]int, len(n.Branches)+1) // +1 for the alternative
+
+	for i := range n.Branches {
+		if i != 0 {
+			// discard expr from previous branch
+			ctx.PushInstr(discardPop, 0, "")
+		}
+
+		b := &n.Branches[i]
+		branchStarts[i] = len(ctx.code)
+
+		err = b.Expr.Compile(ctx, CompilePush)
+		if err != nil {
+			return err
+		}
+
+		// jump to the start of the next branch
+		jumpLabels = append(jumpLabels, jumpLabel{len(ctx.code), i, labelNextBranchStart})
+		ctx.PushInstr(jumpFalse, 0, "")
+
+		ctx.PushInstr(discardPop, 0, "")
+		for _, n := range b.Body {
+			err = n.Compile(ctx, mode)
+			if err != nil {
+				return err
+			}
+		}
+
+		jumpLabels = append(jumpLabels, jumpLabel{len(ctx.code), i, labelEnd})
+		ctx.PushInstr(jump, 0, "")
+	}
+
+	// discard expr from the last branch if it was skipped
+	if len(n.Branches) > 0 {
+		ctx.PushInstr(discardPop, 0, "")
+	}
+
+	// compile the alternative (else) branch
+	branchStarts[len(n.Branches)] = len(ctx.code)
+	for _, n := range n.Alt {
+		err = n.Compile(ctx, mode)
+		if err != nil {
+			return
+		}
+	}
+
+	end := len(ctx.code)
+
+	// update the labels
+	for _, lb := range jumpLabels {
+		switch lb.label {
+		case labelNextBranchStart:
+			ctx.code[lb.idx].iarg = branchStarts[lb.branch+1] - lb.idx - 1
+		case labelEnd:
+			ctx.code[lb.idx].iarg = end - lb.idx - 1
+		}
+
+	}
+
+	return
+}
+
+func (n *DeclareNode) Compile(ctx *CompileContext, mode int) error {
+	err := n.Value.Compile(ctx, CompilePush)
+	if err != nil {
+		return err
+	}
+	ctx.PushInstr(declarePop, 0, n.Name)
+	return nil
+}
+
+func (n *ForNode) Compile(ctx *CompileContext, mode int) error {
+	var loopJumps []loopJump
+	err := n.Expr.Compile(ctx, CompilePush)
+	if err != nil {
+		return err
+	}
+
+	ctx.PushInstr(pushIter, 0, "")
+	ctx.PushInstr(beginScope, 0, "")
+	ctx.PushInstr(push, 0, "")
+	ctx.PushInstr(declarePop, 0, n.Var)
+
+	nextIndex := len(ctx.code)
+	ctx.PushInstr(iterNextOrJump, 0, n.Var)
+	err = ctx.WithLoopJumps(&loopJumps, func() error {
+		for _, n := range n.Body {
+			err := n.Compile(ctx, mode)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	ctx.PushInstr(jump, nextIndex-len(ctx.code)-1, "")
+	endIndex := len(ctx.code)
+	ctx.code[nextIndex].iarg = endIndex - nextIndex - 1
+
+	// update the loop labels
+	for _, jmp := range loopJumps {
+		switch jmp.kind {
+		case loopJumpNext:
+			ctx.code[jmp.idx].iarg = nextIndex - jmp.idx - 1
+		case loopJumpEnd:
+			ctx.code[jmp.idx].iarg = endIndex - jmp.idx - 1
+		}
+	}
 	return nil
 }

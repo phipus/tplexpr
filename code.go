@@ -26,12 +26,19 @@ const (
 	jumpFalse
 	emitPop
 	discardPop
+	storePop
+	declarePop
 	emitNot
 	pushNot
 	emitBinaryOP
 	pushBinaryOP
 	emitNumber
 	pushNumber
+	pushIter
+	iterNextOrJump
+	discardIter
+	beginScope
+	endScope
 )
 
 // Compare constants

@@ -4,28 +4,52 @@ import (
 	"strings"
 )
 
-func GetArg(args []Value, i int, def Value) (v Value) {
-	if i < len(args) {
-		v = args[i]
+type Args struct {
+	args []Value
+}
+
+func (c *Args) Argc() int {
+	return len(c.args)
+}
+
+func (c *Args) ArgDefault(i int, def Value) (v Value) {
+	if i >= 0 && i < len(c.args) {
+		v = c.args[i]
 	} else {
 		v = def
 	}
 	return
 }
 
-func mapNOP(args []Value) (Value, error) {
-	return GetArg(args, 0, StringValue("")), nil
+var (
+	EmptyStringValue Value = StringValue("")
+	EmptyListValue   Value = ListValue{}
+)
+
+func (c *Args) Arg(i int) (v Value) {
+	if i >= 0 && i < len(c.args) {
+		return c.args[i]
+	}
+	return EmptyStringValue
 }
 
-func BuiltinMap(args []Value) (Value, error) {
-	values, err := GetArg(args, 0, ListValue{}).List()
+func (c *Args) Args() []Value {
+	return append([]Value(nil), c.args...)
+}
+
+func mapNOP(args Args) (Value, error) {
+	return args.Arg(0), nil
+}
+
+func BuiltinMap(args Args) (Value, error) {
+	values, err := args.ArgDefault(0, EmptyListValue).List()
 	if err != nil {
 		return nil, err
 	}
-	fn := GetArg(args, 1, FuncValue(mapNOP))
+	fn := args.ArgDefault(1, FuncValue(mapNOP))
 	mapped := make(ListValue, len(values))
 	for i, v := range values {
-		mapped[i], err = fn.Call([]Value{v, NumberValue(i)})
+		mapped[i], err = Call(fn, []Value{v, NumberValue(i)})
 		if err != nil {
 			return nil, err
 		}
@@ -33,20 +57,20 @@ func BuiltinMap(args []Value) (Value, error) {
 	return mapped, nil
 }
 
-func filterNOP(args []Value) (Value, error) {
+func filterNOP(args Args) (Value, error) {
 	return BoolValue(false), nil
 }
 
-func BuiltinFilter(args []Value) (Value, error) {
-	values, err := GetArg(args, 0, ListValue{}).List()
+func BuiltinFilter(args Args) (Value, error) {
+	values, err := args.ArgDefault(0, EmptyListValue).List()
 	if err != nil {
 		return nil, err
 	}
-	fn := GetArg(args, 1, FuncValue(filterNOP))
+	fn := args.ArgDefault(1, FuncValue(filterNOP))
 
 	filtered := []Value{}
 	for _, value := range values {
-		ok, err := fn.Call([]Value{value})
+		ok, err := Call(fn, []Value{value})
 		if err != nil {
 			return nil, err
 		}
@@ -58,8 +82,8 @@ func BuiltinFilter(args []Value) (Value, error) {
 	return ListValue(filtered), nil
 }
 
-func BuiltinReverse(args []Value) (Value, error) {
-	values, err := GetArg(args, 0, ListValue{}).List()
+func BuiltinReverse(args Args) (Value, error) {
+	values, err := args.ArgDefault(0, EmptyListValue).List()
 	if err != nil {
 		return nil, err
 	}
@@ -72,12 +96,12 @@ func BuiltinReverse(args []Value) (Value, error) {
 	return reversed, nil
 }
 
-func BuiltinJoin(args []Value) (Value, error) {
-	value, err := GetArg(args, 0, ListValue{}).List()
+func BuiltinJoin(args Args) (Value, error) {
+	value, err := args.ArgDefault(0, EmptyListValue).List()
 	if err != nil {
 		return nil, err
 	}
-	sep, err := GetArg(args, 1, StringValue("")).String()
+	sep, err := args.ArgDefault(1, StringValue("")).String()
 	if err != nil {
 		return nil, err
 	}
@@ -97,19 +121,19 @@ func BuiltinJoin(args []Value) (Value, error) {
 	return StringValue(sb.String()), nil
 }
 
-func BuiltinBool(args []Value) (Value, error) {
-	value := GetArg(args, 0, StringValue(""))
+func BuiltinBool(args Args) (Value, error) {
+	value := args.Arg(0)
 	return BoolValue(value.Bool()), nil
 }
 
-func BuiltinNumber(args []Value) (Value, error) {
-	value := GetArg(args, 0, StringValue(""))
+func BuiltinNumber(args Args) (Value, error) {
+	value := args.Arg(0)
 	n, err := value.Number()
 	return NumberValue(n), err
 }
 
-func BuiltinList(args []Value) (Value, error) {
-	return ListValue(args), nil
+func BuiltinList(args Args) (Value, error) {
+	return ListValue(args.Args()), nil
 }
 
 func AddBuiltins(c *Context) {

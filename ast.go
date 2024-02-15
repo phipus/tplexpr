@@ -63,3 +63,30 @@ type BinaryOPNode struct {
 type NumberNode struct {
 	Value string
 }
+
+type TemplateNode struct {
+	Name string
+	Args []string
+	Body []Node
+}
+
+type IfBranch struct {
+	Expr Node
+	Body []Node
+}
+
+type IfNode struct {
+	Branches []IfBranch
+	Alt      []Node
+}
+
+type DeclareNode struct {
+	Name  string
+	Value Node
+}
+
+type ForNode struct {
+	Var  string
+	Expr Node
+	Body []Node
+}

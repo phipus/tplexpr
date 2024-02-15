@@ -3,6 +3,7 @@ package tplexpr
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type Parser struct {
@@ -415,6 +416,296 @@ func (p *Parser) ParseExpr() (n Node, err error) {
 	return p.parseOR()
 }
 
+var templateEndTokens = map[TokenType]bool{
+	TokenEndTemplate: true,
+}
+
+func (p *Parser) parseTemplate() (n Node, err error) {
+	t := p.getToken()
+	if t.Type != TokenTemplate {
+		err = p.errUnexpected("template")
+		return
+	}
+	p.consume()
+
+	t = p.getToken()
+	if t.Type != TokenLeftParen {
+		err = p.errUnexpected("(")
+		return
+	}
+	p.consume()
+
+	t = p.getToken()
+	if t.Type != TokenIdent {
+		err = p.errUnexpected("identifier")
+		return
+	}
+	name := string(t.Value)
+	p.consume()
+
+	args := []string{}
+
+	t = p.getToken()
+	if t.Type == TokenComma {
+		p.consume()
+
+		for {
+			t = p.getToken()
+			if t.Type == TokenRightParen {
+				break
+			}
+			if t.Type != TokenIdent {
+				err = p.errUnexpected("identifier | )")
+				return
+			}
+
+			arg := string(t.Value)
+			args = append(args, arg)
+			p.consume()
+
+			t = p.getToken()
+			if t.Type == TokenComma {
+				p.consume()
+			} else {
+				break
+			}
+		}
+	}
+
+	if t.Type != TokenRightParen {
+		err = p.errUnexpected(")")
+		return
+	}
+	p.consume()
+
+	stmts, err := p.parseStmtList(templateEndTokens)
+	if err != nil {
+		return
+	}
+	p.consume()
+
+	n = &TemplateNode{name, args, stmts}
+	return
+}
+
+var ifEndTokens = map[TokenType]bool{
+	TokenElse:   true,
+	TokenElseIf: true,
+	TokenEndIf:  true,
+}
+
+func (p *Parser) parseIf() (n Node, err error) {
+	t := p.getToken()
+	if t.Type != TokenIf {
+		err = p.errUnexpected("if")
+		return
+	}
+	p.consume()
+
+	expr, err := p.ParseExpr()
+	if err != nil {
+		return
+	}
+
+	t = p.getToken()
+	if t.Type != TokenThen {
+		err = p.errUnexpected("then")
+		return
+	}
+	p.consume()
+
+	body, err := p.parseStmtList(ifEndTokens)
+
+	branches := []IfBranch{{expr, body}}
+
+	for {
+		t = p.getToken()
+		if t.Type != TokenElseIf {
+			break
+		}
+		p.consume()
+
+		expr, err = p.ParseExpr()
+		if err != nil {
+			return
+		}
+		t = p.getToken()
+		if t.Type != TokenThen {
+			err = p.errUnexpected("then")
+			return
+		}
+		p.consume()
+		body, err = p.parseStmtList(ifEndTokens)
+		if err != nil {
+			return
+		}
+		branches = append(branches, IfBranch{expr, body})
+	}
+
+	if t.Type == TokenElse {
+		p.consume()
+		body, err = p.parseStmtList(ifEndTokens)
+		if err != nil {
+			return
+		}
+		t = p.getToken()
+	} else {
+		body = nil
+	}
+
+	if t.Type != TokenEndIf {
+		err = p.errUnexpected("endif")
+		return
+	}
+	p.consume()
+
+	n = &IfNode{branches, body}
+	return
+}
+
+var forEndTokenMap = map[TokenType]bool{
+	TokenEndFor: true,
+}
+
+func (p *Parser) parseFor() (n Node, err error) {
+	t := p.getToken()
+	if t.Type != TokenFor {
+		err = p.errUnexpected("for")
+		return
+	}
+	p.consume()
+
+	t = p.getToken()
+	if t.Type != TokenIdent {
+		err = p.errUnexpected("identifier")
+		return
+	}
+	varName := string(t.Value)
+	p.consume()
+
+	t = p.getToken()
+	if t.Type != TokenIn {
+		err = p.errUnexpected("in")
+		return
+	}
+	p.consume()
+
+	expr, err := p.ParseExpr()
+	if err != nil {
+		return
+	}
+
+	t = p.getToken()
+	if t.Type != TokenDo {
+		err = p.errUnexpected("do")
+		return
+	}
+	p.consume()
+
+	body, err := p.parseStmtList(forEndTokenMap)
+	if err != nil {
+		return
+	}
+	p.consume()
+
+	n = &ForNode{varName, expr, body}
+	return
+}
+
+func (p *Parser) parseDeclare() (n Node, err error) {
+	t := p.getToken()
+	if t.Type != TokenDeclare {
+		err = p.errUnexpected("declare")
+		return
+	}
+	p.consume()
+
+	t = p.getToken()
+	if t.Type != TokenLeftParen {
+		err = p.errUnexpected("(")
+		return
+	}
+	p.consume()
+
+	t = p.getToken()
+	if t.Type != TokenIdent {
+		err = p.errUnexpected("identifier")
+		return
+	}
+	name := string(t.Value)
+	p.consume()
+
+	t = p.getToken()
+	if t.Type != TokenComma {
+		err = p.errUnexpected(",")
+		return
+	}
+	p.consume()
+
+	n, err = p.ParseExpr()
+	if err != nil {
+		return
+	}
+
+	t = p.getToken()
+	if t.Type != TokenRightParen {
+		err = p.errUnexpected(")")
+		return
+	}
+	p.consume()
+
+	n = &DeclareNode{name, n}
+	return
+}
+
+func (p *Parser) ParseStmt() (n Node, err error) {
+	t := p.getToken()
+	switch t.Type {
+	case TokenTemplate:
+		n, err = p.parseTemplate()
+	case TokenIf:
+		n, err = p.parseIf()
+	case TokenFor:
+		n, err = p.parseFor()
+	case TokenDeclare:
+		n, err = p.parseDeclare()
+	default:
+		n, err = p.ParseExpr()
+	}
+	return
+}
+
+func (p *Parser) parseStmtList(endTokenMap map[TokenType]bool) (stmts []Node, err error) {
+	for {
+		t := p.getToken()
+
+		if endTokenMap[t.Type] {
+			return
+		}
+
+		switch t.Type {
+		case TokenEOF:
+			expected := make([]string, 0, len(endTokenMap))
+			for tt, ok := range endTokenMap {
+				if ok {
+					expected = append(expected, strings.ToLower(tt.String()))
+				}
+			}
+			err = p.errUnexpected(strings.Join(expected, " | "))
+			return
+		case TokenError:
+			err = p.s.Err
+			return
+		}
+
+		stmt, err := p.ParseStmt()
+		if err != nil {
+			return stmts, err
+		}
+		stmts = append(stmts, stmt)
+	}
+}
+
 func (p *Parser) Parse() (n Node, err error) {
 	nodes := []Node{}
 
@@ -424,7 +715,7 @@ func (p *Parser) Parse() (n Node, err error) {
 			break
 		}
 
-		n, err = p.ParseExpr()
+		n, err = p.ParseStmt()
 		if err != nil {
 			return
 		}
@@ -442,3 +733,13 @@ func (p *Parser) Parse() (n Node, err error) {
 	}
 	return
 }
+
+type loopJump struct {
+	idx  int
+	kind int
+}
+
+const (
+	loopJumpNext = iota
+	loopJumpEnd
+)
