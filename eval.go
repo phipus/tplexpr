@@ -1,6 +1,7 @@
 package tplexpr
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -16,6 +17,7 @@ const (
 	KindList
 	KindObject
 	KindFunction
+	KindIterator
 )
 
 const (
@@ -25,6 +27,7 @@ const (
 	KindListName     = "list"
 	KindObjectName   = "object"
 	KindFunctionName = "function"
+	KindIteratorName = "iterator"
 )
 
 func (v ValueKind) String() string {
@@ -42,6 +45,8 @@ func (v ValueKind) String() string {
 		s = KindObjectName
 	case KindFunction:
 		s = KindFunctionName
+	case KindIterator:
+		s = KindIteratorName
 	}
 	return s
 }
@@ -385,6 +390,91 @@ func (f FuncValue) Call(args Args, wr ValueWriter) error {
 		return err
 	}
 	return wr.WriteValue(value)
+}
+
+var IterListLimit = 10000
+
+type IterValue struct {
+	I ValueIter
+}
+
+var _ Value = IterValue{}
+
+func (v IterValue) Kind() ValueKind {
+	return KindIterator
+}
+
+func (v IterValue) Bool() bool {
+	return true
+}
+
+func (v IterValue) Number() (float64, error) {
+	return 0, &ErrType{opConvert, KindIteratorName, conTO, KindNumberName}
+}
+
+func (v IterValue) String() (string, error) {
+	sb := strings.Builder{}
+	for i := 0; i < IterListLimit; i++ {
+		v, ok, err := v.I.Next()
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return sb.String(), nil
+		}
+
+		if i != 0 {
+			sb.WriteByte(' ')
+		}
+
+		str, err := v.String()
+		if err != nil {
+			return "", err
+		}
+		sb.WriteString(str)
+	}
+	sb.WriteString(" ...")
+	return sb.String(), nil
+}
+
+var ErrIterListLimit = errors.New("iterator to list limit exhausted")
+
+func (v IterValue) List() ([]Value, error) {
+	lst := []Value{}
+	for i := 0; i < IterListLimit; i++ {
+		v, ok, err := v.I.Next()
+		if err != nil {
+			return lst, err
+		}
+		if !ok {
+			return lst, nil
+		}
+		lst = append(lst, v)
+	}
+	return lst, ErrIterListLimit
+}
+
+func (v IterValue) Iter() (ValueIter, error) {
+	return v.I, nil
+}
+
+func (v IterValue) Keys() []string {
+	return nil
+}
+
+func (v IterValue) GetAttr(name string) (Value, bool) {
+	return nil, false
+}
+
+func (v IterValue) Call(args Args, wr ValueWriter) error {
+	vv, ok, err := v.I.Next()
+	if err != nil {
+		return err
+	}
+	if ok {
+		return wr.WriteValue(vv)
+	}
+	return wr.WriteValue(EmptyStringValue)
 }
 
 type subprogValue struct {

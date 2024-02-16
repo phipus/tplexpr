@@ -295,11 +295,19 @@ beginScan:
 			s.Err = s.errUnexpectedInput()
 			return
 		case '+':
+			if s.pos+1 < len(s.input) && unicode.IsDigit(rune(s.input[s.pos+1])) {
+				t = s.scanNumber(c)
+				return
+			}
 			s.pos += 1
 			t.End = s.pos
 			t.Type = TokenADD
 			return
 		case '-':
+			if s.pos+1 < len(s.input) && unicode.IsDigit(rune(s.input[s.pos+1])) {
+				t = s.scanNumber(c)
+				return
+			}
 			s.pos += 1
 			t.End = s.pos
 			t.Type = TokenSUB
@@ -397,23 +405,7 @@ beginScan:
 				return
 			}
 			if isNumberStartByte(c) {
-				value := []byte{c}
-				s.pos += 1
-
-				for s.pos < len(s.input) {
-					c = s.input[s.pos]
-
-					if isNumberByte(c) {
-						s.pos += 1
-						value = append(value, c)
-					} else {
-						break
-					}
-				}
-
-				t.End = s.pos
-				t.Type = TokenNumber
-				t.Value = value
+				t = s.scanNumber(c)
 				return
 			}
 
@@ -437,6 +429,29 @@ beginScan:
 	default:
 		panic("tplexpr: invalid scan mode")
 	}
+}
+
+func (s *Scanner) scanNumber(startByte byte) (t Token) {
+	c := startByte
+
+	value := []byte{c}
+	s.pos += 1
+
+	for s.pos < len(s.input) {
+		c = s.input[s.pos]
+
+		if isNumberByte(c) {
+			s.pos += 1
+			value = append(value, c)
+		} else {
+			break
+		}
+	}
+
+	t.End = s.pos
+	t.Type = TokenNumber
+	t.Value = value
+	return
 }
 
 func (s *Scanner) errUnexpectedInput() error {

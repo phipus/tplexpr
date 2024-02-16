@@ -136,6 +136,67 @@ func BuiltinList(args Args) (Value, error) {
 	return ListValue(args.Args()), nil
 }
 
+type rangeIter struct {
+	start int
+	stop  int
+	step  int
+}
+
+var _ ValueIter = &rangeIter{}
+
+func (r *rangeIter) Next() (Value, bool, error) {
+	if (r.step > 0 && r.start >= r.stop) || (r.step < 0 && r.start <= r.stop) {
+		return nil, false, nil
+	}
+	v := NumberValue(r.start)
+	r.start += r.step
+	return v, true, nil
+}
+
+func BuiltinRange(args Args) (Value, error) {
+	rng := &rangeIter{step: 1}
+
+	switch args.Argc() {
+	case 0:
+		// nop
+	case 1:
+		stop, err := args.Arg(0).Number()
+		if err != nil {
+			return nil, err
+		}
+		rng.stop = int(stop)
+	case 2:
+		start, err := args.Arg(0).Number()
+		if err != nil {
+			return nil, err
+		}
+		stop, err := args.Arg(1).Number()
+		if err != nil {
+			return nil, err
+		}
+		rng.start = int(start)
+		rng.stop = int(stop)
+	default:
+		start, err := args.Arg(0).Number()
+		if err != nil {
+			return nil, err
+		}
+		stop, err := args.Arg(1).Number()
+		if err != nil {
+			return nil, err
+		}
+		step, err := args.Arg(2).Number()
+		if err != nil {
+			return nil, err
+		}
+		rng.start = int(start)
+		rng.stop = int(stop)
+		rng.step = int(step)
+	}
+
+	return IterValue{rng}, nil
+}
+
 func AddBuiltins(c *Context) {
 	c.Declare("map", FuncValue(BuiltinMap))
 	c.Declare("filter", FuncValue(BuiltinFilter))
@@ -145,4 +206,5 @@ func AddBuiltins(c *Context) {
 	c.Declare("false", BoolValue(false))
 	c.Declare("bool", FuncValue(BuiltinBool))
 	c.Declare("number", FuncValue(BuiltinNumber))
+	c.Declare("range", FuncValue(BuiltinRange))
 }

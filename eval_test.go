@@ -51,6 +51,11 @@ func TestEval(t *testing.T) {
 		{`${if true then "A" elseif true then "B" else "C" endif}`, "A", nil},
 		{`${if true then "A" elseif false then "B" else "C" endif}`, "A", nil},
 		{`${if false then "A" elseif false then "B" else "C" endif}`, "C", nil},
+		{`${range(1, 6)}`, `1 2 3 4 5`, nil},
+		{`${range(6)}`, `0 1 2 3 4 5`, nil},
+		{`${range(0, -1, -1)}`, `0`, nil},
+		{`${range(0, -1)}`, ``, nil},
+		{`${range(2, 0, -1)}`, `2 1`, nil},
 	}
 
 	for i := range testCases {
