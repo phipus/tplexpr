@@ -39,6 +39,8 @@ const (
 	discardIter
 	beginScope
 	endScope
+	pushOutputFilter
+	popOutputFilter
 )
 
 // Compare constants

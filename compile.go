@@ -1,19 +1,27 @@
 package tplexpr
 
 type CompileContext struct {
-	code      []Instr
-	subprogs  []Subprog
-	loopJumps *[]loopJump
+	code           []Instr
+	subprogs       []Subprog
+	loopJumps      *[]loopJump
+	valueFilters   []ValueFilter
+	valueFilterMap map[ValueFilter]int
 }
 
 func NewCompileContext() CompileContext {
-	return CompileContext{}
+	return CompileContext{
+		valueFilterMap: map[ValueFilter]int{},
+	}
 }
 
 const (
 	CompileEmit = iota
 	CompilePush
 )
+
+type ValueFilter interface {
+	Filter(s string) (string, error)
+}
 
 func (c *CompileContext) setCode(code []Instr) {
 	c.code = code
@@ -34,6 +42,10 @@ func (c *CompileContext) Value(mode int, value string) {
 	case CompilePush:
 		c.PushInstr(push, 0, value)
 	}
+}
+
+func (c *CompileContext) EmitValue(value string) {
+	c.PushInstr(emit, 0, value)
 }
 
 func (c *CompileContext) Code() []Instr {
@@ -126,10 +138,24 @@ func (c *CompileContext) Number(mode int, value string) {
 	}
 }
 
+func (c *CompileContext) PushOutputFilter(f ValueFilter) {
+	idx, ok := c.valueFilterMap[f]
+	if !ok {
+		idx = len(c.valueFilters)
+		c.valueFilters = append(c.valueFilters, f)
+	}
+	c.PushInstr(pushOutputFilter, idx, "")
+}
+
+func (c *CompileContext) PopOutputFilter() {
+	c.PushInstr(popOutputFilter, 0, "")
+}
+
 func (c *CompileContext) Compile() (code []Instr, ctx Context) {
 	code = c.code
 	ctx = NewContext()
 	ctx.subprogs = c.subprogs
+	ctx.valueFilters = c.valueFilters
 	return
 }
 

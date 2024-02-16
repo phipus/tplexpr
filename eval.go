@@ -2,6 +2,7 @@ package tplexpr
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 )
@@ -51,9 +52,14 @@ type Value interface {
 	Number() (float64, error)
 	String() (string, error)
 	List() ([]Value, error)
+	Iter() (ValueIter, error)
 	Keys() []string
 	GetAttr(name string) (Value, bool)
 	Call(args Args, wr ValueWriter) error
+}
+
+type ValueIter interface {
+	Next() (Value, bool, error)
 }
 
 const (
@@ -105,6 +111,10 @@ func (b BoolValue) List() ([]Value, error) {
 	return []Value{b}, nil
 }
 
+func (b BoolValue) Iter() (ValueIter, error) {
+	return &singleValueIter{b}, nil
+}
+
 func (b BoolValue) Keys() []string {
 	return nil
 }
@@ -137,6 +147,10 @@ func (n NumberValue) String() (string, error) {
 
 func (n NumberValue) List() ([]Value, error) {
 	return []Value{n}, nil
+}
+
+func (n NumberValue) Iter() (ValueIter, error) {
+	return &singleValueIter{n}, nil
 }
 
 func (n NumberValue) Keys() []string {
@@ -173,6 +187,10 @@ func (s StringValue) String() (string, error) {
 
 func (s StringValue) List() ([]Value, error) {
 	return []Value{s}, nil
+}
+
+func (s StringValue) Iter() (ValueIter, error) {
+	return &singleValueIter{s}, nil
 }
 
 func (s StringValue) Keys() []string {
@@ -220,6 +238,10 @@ func (l ListValue) String() (string, error) {
 
 func (l ListValue) List() ([]Value, error) {
 	return l, nil
+}
+
+func (l ListValue) Iter() (ValueIter, error) {
+	return &listIter{l}, nil
 }
 
 func (l ListValue) Keys() []string {
@@ -287,6 +309,11 @@ func (o ObjectValue) List() ([]Value, error) {
 	return keys, nil
 }
 
+func (o ObjectValue) Iter() (ValueIter, error) {
+	keys, _ := o.List()
+	return &listIter{keys}, nil
+}
+
 func (o ObjectValue) Keys() []string {
 	keys := make([]string, 0, len(o))
 	for key := range o {
@@ -336,6 +363,14 @@ func (f FuncValue) List() ([]Value, error) {
 	return value.List()
 }
 
+func (f FuncValue) Iter() (ValueIter, error) {
+	value, err := f(Args{})
+	if err != nil {
+		return nil, err
+	}
+	return value.Iter()
+}
+
 func (f FuncValue) Keys() []string {
 	return nil
 }
@@ -368,7 +403,7 @@ func (s *subprogValue) eval(args Args, wr ValueWriter) error {
 		s.ctx.Declare(argName, args.ArgDefault(i, StringValue("")))
 	}
 
-	return Eval(s.ctx, s.code, wr)
+	return EvalRaw(s.ctx, s.code, wr)
 }
 
 func (s *subprogValue) evalString(args Args) (string, error) {
@@ -410,6 +445,14 @@ func (s *subprogValue) List() ([]Value, error) {
 	return ListValue{StringValue(value)}, nil
 }
 
+func (s *subprogValue) Iter() (ValueIter, error) {
+	value, err := s.evalString(Args{})
+	if err != nil {
+		return nil, err
+	}
+	return &singleValueIter{StringValue(value)}, nil
+}
+
 func (s *subprogValue) Keys() []string {
 	return nil
 }
@@ -428,13 +471,15 @@ type Subprog struct {
 }
 
 type Context struct {
-	vars       map[string]Value
-	shadowed   []namedVar
-	scope      int
-	prevScopes []int
-	subprogs   []Subprog
-	iters      []evalIter
-	NameError  func(name string) (Value, error)
+	vars          map[string]Value
+	shadowed      []namedVar
+	scope         int
+	prevScopes    []int
+	subprogs      []Subprog
+	iters         []ValueIter
+	valueFilters  []ValueFilter
+	outputFilters []ValueFilter
+	NameError     func(name string) (Value, error)
 }
 
 func NewContext() Context {
@@ -514,28 +559,11 @@ func (c *Context) EndScope() {
 	c.prevScopes = c.prevScopes[:len(c.prevScopes)-1]
 }
 
-type evalIter interface {
-	Next() (Value, bool, error)
-}
-
-type listIter struct {
-	list []Value
-}
-
-func (l *listIter) Next() (Value, bool, error) {
-	if len(l.list) > 0 {
-		v := l.list[0]
-		l.list = l.list[1:]
-		return v, true, nil
-	}
-	return nil, false, nil
-}
-
 type ValueWriter interface {
 	WriteValue(v Value) error
 }
 
-func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
+func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 	openScopes := 0
 	defer func() {
 		for openScopes > 0 {
@@ -544,9 +572,14 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 		}
 	}()
 
+	pushedOutputFilters := 0
+	defer func() {
+		c.outputFilters = c.outputFilters[:len(c.outputFilters)-pushedOutputFilters]
+	}()
+
 	ip := 0
 	var (
-		stack []Value
+		stack valueStack
 		value Value
 	)
 
@@ -561,7 +594,7 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 				return
 			}
 		case push:
-			stack = append(stack, StringValue(instr.sarg))
+			stack.Push(StringValue(instr.sarg))
 		case emitFetch:
 			value, err = c.Lookup(instr.sarg)
 			if err != nil {
@@ -576,7 +609,7 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 			if err != nil {
 				return
 			}
-			stack = append(stack, value)
+			stack.Push(value)
 		case emitCall:
 			err = evalCall(c, &stack, instr, wr)
 			if err != nil {
@@ -588,7 +621,7 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 			if err != nil {
 				return err
 			}
-			stack = append(stack, retBuilder.Value())
+			stack.Push(retBuilder.Value())
 		case emitCallDyn:
 			err = evalCallDyn(c, &stack, instr, wr)
 			if err != nil {
@@ -600,7 +633,7 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 			if err != nil {
 				return err
 			}
-			stack = append(stack, retBuilder.Value())
+			stack.Push(retBuilder.Value())
 		case emitAttr:
 			value, err = evalAttr(c, &stack, instr)
 			if err != nil {
@@ -615,9 +648,9 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 			if err != nil {
 				return err
 			}
-			stack = append(stack, value)
+			stack.Push(value)
 		case emitSubprog:
-			value, err = evalSubprog(c, &stack, instr)
+			value, err = evalSubprog(c, instr)
 			if err != nil {
 				return err
 			}
@@ -626,11 +659,11 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 				return err
 			}
 		case pushSubprog:
-			value, err = evalSubprog(c, &stack, instr)
+			value, err = evalSubprog(c, instr)
 			if err != nil {
 				return err
 			}
-			stack = append(stack, value)
+			stack.Push(value)
 		case emitCompare:
 			value, err = evalCompare(c, &stack, instr)
 			if err != nil {
@@ -645,34 +678,35 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 			if err != nil {
 				return err
 			}
-			stack = append(stack, value)
+			stack.Push(value)
 		case jump:
 			ip += instr.iarg
 		case jumpTrue:
-			if peek(stack).Bool() {
+			if stack.Peek().Bool() {
 				ip += instr.iarg
 			}
 		case jumpFalse:
-			if !peek(stack).Bool() {
+			if !stack.Peek().Bool() {
 				ip += instr.iarg
 			}
 		case emitPop:
-			err = wr.WriteValue(pop(&stack))
+			err = wr.WriteValue(stack.Pop())
 			if err != nil {
 				return err
 			}
 		case discardPop:
-			pop(&stack)
+			stack.Pop()
 		case storePop:
-			value := pop(&stack)
+			value := stack.Pop()
 			c.Assign(instr.sarg, value)
 		case declarePop:
-			value := pop(&stack)
+			value := stack.Pop()
 			c.Declare(instr.sarg, value)
 		case pushNot:
-			stack = append(stack, BoolValue(!pop(&stack).Bool()))
+			pvalue := stack.PeekPtr()
+			*pvalue = BoolValue(!(*pvalue).Bool())
 		case emitNot:
-			value = BoolValue(!pop(&stack).Bool())
+			value = BoolValue(!stack.Pop().Bool())
 			err = wr.WriteValue(value)
 			if err != nil {
 				return err
@@ -691,7 +725,7 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 			if err != nil {
 				return err
 			}
-			stack = append(stack, value)
+			stack.Push(value)
 		case emitNumber:
 			value = evalNumber(c, instr)
 			err = wr.WriteValue(value)
@@ -700,14 +734,14 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 			}
 		case pushNumber:
 			value = evalNumber(c, instr)
-			stack = append(stack, value)
+			stack.Push(value)
 		case pushIter:
-			value := pop(&stack)
-			lst, err := value.List()
+			value := stack.Pop()
+			iter, err := value.Iter()
 			if err != nil {
 				return err
 			}
-			c.iters = append(c.iters, &listIter{lst})
+			c.iters = append(c.iters, iter)
 		case iterNextOrJump:
 			ok := false
 			value, ok, err = c.iters[len(c.iters)-1].Next()
@@ -727,13 +761,20 @@ func Eval(c *Context, code []Instr, wr ValueWriter) (err error) {
 		case endScope:
 			c.EndScope()
 			openScopes--
+		case pushOutputFilter:
+			pushedOutputFilters++
+			c.outputFilters = append(c.outputFilters, c.valueFilters[instr.iarg])
+		case popOutputFilter:
+			pushedOutputFilters--
+			c.outputFilters = c.outputFilters[:len(c.outputFilters)-1]
+
 		}
 	}
 	return nil
 }
 
-func evalCall(c *Context, stack *[]Value, instr Instr, wr ValueWriter) (err error) {
-	args := popn(stack, instr.iarg)
+func evalCall(c *Context, stack *valueStack, instr Instr, wr ValueWriter) (err error) {
+	args := stack.PopN(instr.iarg)
 
 	value, err := c.Lookup(instr.sarg)
 	if err != nil {
@@ -742,16 +783,13 @@ func evalCall(c *Context, stack *[]Value, instr Instr, wr ValueWriter) (err erro
 	return value.Call(Args{args}, wr)
 }
 
-func evalCallDyn(c *Context, stack *[]Value, instr Instr, wr ValueWriter) (err error) {
-	allArgs := (*stack)[len(*stack)-instr.iarg-1:]
-	*stack = (*stack)[:len(*stack)-instr.iarg-1]
-
+func evalCallDyn(c *Context, stack *valueStack, instr Instr, wr ValueWriter) (err error) {
+	allArgs := stack.PopN(instr.iarg + 1)
 	return allArgs[0].Call(Args{allArgs[1:]}, wr)
 }
 
-func evalAttr(c *Context, stack *[]Value, instr Instr) (value Value, err error) {
-	value = (*stack)[len(*stack)-1]
-	*stack = (*stack)[:len(*stack)-1]
+func evalAttr(c *Context, stack *valueStack, instr Instr) (value Value, err error) {
+	value = stack.Pop()
 	value, ok := value.GetAttr(instr.sarg)
 	if !ok {
 		value, err = c.NameError(instr.sarg)
@@ -759,23 +797,23 @@ func evalAttr(c *Context, stack *[]Value, instr Instr) (value Value, err error) 
 	return
 }
 
-func evalSubprog(c *Context, stack *[]Value, instr Instr) (value Value, err error) {
+func evalSubprog(c *Context, instr Instr) (value Value, err error) {
 	subprog := c.subprogs[instr.iarg]
 	ctx := c.Clone()
 	value = &subprogValue{subprog.Code, subprog.Args, ctx}
 	return
 }
 
-func evalCompare(c *Context, stack *[]Value, instr Instr) (value Value, err error) {
-	args := popn(stack, 2)
+func evalCompare(c *Context, stack *valueStack, instr Instr) (value Value, err error) {
+	args := stack.PopN(2)
 
 	ok, err := compareValues(args[0], args[1], instr.iarg)
 	value = BoolValue(ok)
 	return
 }
 
-func evalBinaryOP(c *Context, stack *[]Value, instr Instr) (value Value, err error) {
-	args := popn(stack, 2)
+func evalBinaryOP(c *Context, stack *valueStack, instr Instr) (value Value, err error) {
+	args := stack.PopN(2)
 
 	value, err = binaryOPValues(args[0], args[1], instr.iarg)
 	return
@@ -788,19 +826,66 @@ func evalNumber(c *Context, instr Instr) (value Value) {
 }
 
 type stringBuilder struct {
+	c *Context
 	b strings.Builder
 }
 
 func (b *stringBuilder) WriteValue(v Value) error {
 	str, err := v.String()
-	if err == nil {
-		b.b.WriteString(str)
+	if err != nil {
+		return err
 	}
-	return err
+	if len(b.c.outputFilters) > 0 {
+		if f := b.c.outputFilters[len(b.c.outputFilters)-1]; f != nil {
+			str, err = f.Filter(str)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	b.b.WriteString(str)
+	return nil
 }
 
 func (b *stringBuilder) String() string {
 	return b.b.String()
+}
+
+func EvalString(c *Context, code []Instr) (string, error) {
+	b := stringBuilder{c: c}
+	err := EvalRaw(c, code, &b)
+	return b.String(), err
+}
+
+type outputWriter struct {
+	c *Context
+	w io.Writer
+}
+
+func (w *outputWriter) WriteValue(v Value) error {
+	str, err := v.String()
+	if err != nil {
+		return err
+	}
+	if len(w.c.outputFilters) > 0 {
+		if f := w.c.outputFilters[len(w.c.outputFilters)-1]; f != nil {
+			str, err = f.Filter(str)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	n, err := w.w.Write([]byte(str))
+	if err == nil && n < len(str) {
+		err = io.ErrShortWrite
+	}
+	return err
+}
+
+func EvalWriter(c *Context, code []Instr) error {
+	w := outputWriter{}
+	err := EvalRaw(c, code, &w)
+	return err
 }
 
 type returnValueBuilder struct {
@@ -849,25 +934,60 @@ func Call(v Value, args []Value) (Value, error) {
 	return wr.Value(), err
 }
 
-func EvalString(c *Context, code []Instr) (string, error) {
-	b := stringBuilder{}
-	err := Eval(c, code, &b)
-	return b.String(), err
+type valueStack struct {
+	stack []Value
 }
 
-func peek(stack []Value) Value {
-	value := stack[len(stack)-1]
+func (s *valueStack) Push(v Value) {
+	s.stack = append(s.stack, v)
+}
+
+func (s *valueStack) Peek() Value {
+	return s.stack[len(s.stack)-1]
+}
+
+func (s *valueStack) PeekPtr() *Value {
+	return &s.stack[len(s.stack)-1]
+}
+
+func (s *valueStack) Pop() Value {
+	value := s.stack[len(s.stack)-1]
+	s.stack = s.stack[:len(s.stack)-1]
 	return value
 }
 
-func pop(stack *[]Value) Value {
-	value := (*stack)[len(*stack)-1]
-	*stack = (*stack)[:len(*stack)-1]
-	return value
+func (s *valueStack) PopN(n int) []Value {
+	values := s.stack[len(s.stack)-n:]
+	s.stack = s.stack[:len(s.stack)-n]
+	return values
 }
 
-func popn(stack *[]Value, n int) []Value {
-	args := (*stack)[len(*stack)-n:]
-	*stack = (*stack)[:len(*stack)-n]
-	return args
+type singleValueIter struct {
+	v Value
+}
+
+var _ ValueIter = &singleValueIter{}
+
+func (i *singleValueIter) Next() (Value, bool, error) {
+	if i.v != nil {
+		v := i.v
+		i.v = nil
+		return v, true, nil
+	}
+	return nil, false, nil
+}
+
+type listIter struct {
+	list []Value
+}
+
+var _ ValueIter = &listIter{}
+
+func (l *listIter) Next() (Value, bool, error) {
+	if len(l.list) > 0 {
+		v := l.list[0]
+		l.list = l.list[1:]
+		return v, true, nil
+	}
+	return nil, false, nil
 }
