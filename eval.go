@@ -702,6 +702,8 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 		case declarePop:
 			value := stack.Pop()
 			c.Declare(instr.sarg, value)
+		case pushPeek:
+			stack.Push(stack.Peek())
 		case pushNot:
 			pvalue := stack.PeekPtr()
 			*pvalue = BoolValue(!(*pvalue).Bool())

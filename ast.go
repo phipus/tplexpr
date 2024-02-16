@@ -23,7 +23,7 @@ type DynCallNode struct {
 }
 
 type EmitNode struct {
-	nodes []Node
+	Nodes []Node
 }
 
 type AttrNode struct {

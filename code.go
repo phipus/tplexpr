@@ -28,6 +28,7 @@ const (
 	discardPop
 	storePop
 	declarePop
+	pushPeek
 	emitNot
 	pushNot
 	emitBinaryOP

@@ -120,6 +120,14 @@ func (c *CompileContext) Compare(mode int, cmp int) {
 	}
 }
 
+func (c *CompileContext) PushPeek() {
+	c.PushInstr(pushPeek, 0, "")
+}
+
+func (c *CompileContext) DiscardPop() {
+	c.PushInstr(discardPop, 0, "")
+}
+
 func (c *CompileContext) BinaryOP(mode int, op int) {
 	switch mode {
 	case CompileEmit:
@@ -182,7 +190,7 @@ func (n *CallNode) Compile(ctx *CompileContext, mode int) error {
 }
 
 func (n *EmitNode) Compile(ctx *CompileContext, mode int) error {
-	for _, node := range n.nodes {
+	for _, node := range n.Nodes {
 		err := node.Compile(ctx, mode)
 		if err != nil {
 			return err
