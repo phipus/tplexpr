@@ -31,8 +31,8 @@ func _() {
 	_ = x[TokenSUB-20]
 	_ = x[TokenMUL-21]
 	_ = x[TokenDIV-22]
-	_ = x[TokenTemplate-23]
-	_ = x[TokenEndTemplate-24]
+	_ = x[TokenBlock-23]
+	_ = x[TokenEndBlock-24]
 	_ = x[TokenIf-25]
 	_ = x[TokenThen-26]
 	_ = x[TokenElse-27]
@@ -44,12 +44,15 @@ func _() {
 	_ = x[TokenBreak-33]
 	_ = x[TokenContinue-34]
 	_ = x[TokenEndFor-35]
-	_ = x[TokenError-36]
+	_ = x[TokenInclude-36]
+	_ = x[TokenDiscard-37]
+	_ = x[TokenEndDiscard-38]
+	_ = x[TokenError-39]
 }
 
-const _TokenType_name = "ValueIdentNumberLeftParenRightParenDotCommaEOFStringArrowDeclareGTGEEQNELELTANDORADDSUBMULDIVTemplateEndTemplateIfThenElseElseIfEndIfForInDoBreakContinueEndForError"
+const _TokenType_name = "ValueIdentNumberLeftParenRightParenDotCommaEOFStringArrowDeclareGTGEEQNELELTANDORADDSUBMULDIVBlockEndBlockIfThenElseElseIfEndIfForInDoBreakContinueEndForIncludeDiscardEndDiscardError"
 
-var _TokenType_index = [...]uint8{0, 5, 10, 16, 25, 35, 38, 43, 46, 52, 57, 64, 66, 68, 70, 72, 74, 76, 79, 81, 84, 87, 90, 93, 101, 112, 114, 118, 122, 128, 133, 136, 138, 140, 145, 153, 159, 164}
+var _TokenType_index = [...]uint8{0, 5, 10, 16, 25, 35, 38, 43, 46, 52, 57, 64, 66, 68, 70, 72, 74, 76, 79, 81, 84, 87, 90, 93, 98, 106, 108, 112, 116, 122, 127, 130, 132, 134, 139, 147, 153, 160, 167, 177, 182}
 
 func (i TokenType) String() string {
 	if i < 0 || i >= TokenType(len(_TokenType_index)-1) {

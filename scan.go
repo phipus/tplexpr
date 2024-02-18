@@ -33,8 +33,8 @@ const (
 	TokenSUB
 	TokenMUL
 	TokenDIV
-	TokenTemplate
-	TokenEndTemplate
+	TokenBlock
+	TokenEndBlock
 	TokenIf
 	TokenThen
 	TokenElse
@@ -46,6 +46,9 @@ const (
 	TokenBreak
 	TokenContinue
 	TokenEndFor
+	TokenInclude
+	TokenDiscard
+	TokenEndDiscard
 	TokenError
 )
 
@@ -63,20 +66,23 @@ const (
 )
 
 var keywordMap = map[string]TokenType{
-	"template":    TokenTemplate,
-	"endtemplate": TokenEndTemplate,
-	"if":          TokenIf,
-	"then":        TokenThen,
-	"else":        TokenElse,
-	"elseif":      TokenElseIf,
-	"endif":       TokenEndIf,
-	"for":         TokenFor,
-	"in":          TokenIn,
-	"do":          TokenDo,
-	"break":       TokenBreak,
-	"continue":    TokenContinue,
-	"endfor":      TokenEndFor,
-	"declare":     TokenDeclare,
+	"block":      TokenBlock,
+	"endblock":   TokenEndBlock,
+	"if":         TokenIf,
+	"then":       TokenThen,
+	"else":       TokenElse,
+	"elseif":     TokenElseIf,
+	"endif":      TokenEndIf,
+	"for":        TokenFor,
+	"in":         TokenIn,
+	"do":         TokenDo,
+	"break":      TokenBreak,
+	"continue":   TokenContinue,
+	"endfor":     TokenEndFor,
+	"declare":    TokenDeclare,
+	"include":    TokenInclude,
+	"discard":    TokenDiscard,
+	"enddiscard": TokenEndDiscard,
 }
 
 var (

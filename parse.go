@@ -417,12 +417,12 @@ func (p *Parser) ParseExpr() (n Node, err error) {
 }
 
 var templateEndTokens = map[TokenType]bool{
-	TokenEndTemplate: true,
+	TokenEndBlock: true,
 }
 
 func (p *Parser) parseTemplate() (n Node, err error) {
 	t := p.getToken()
-	if t.Type != TokenTemplate {
+	if t.Type != TokenBlock {
 		err = p.errUnexpected("template")
 		return
 	}
@@ -484,7 +484,7 @@ func (p *Parser) parseTemplate() (n Node, err error) {
 	}
 	p.consume()
 
-	n = &TemplateNode{name, args, stmts}
+	n = &BlockNode{name, args, stmts}
 	return
 }
 
@@ -658,10 +658,63 @@ func (p *Parser) parseDeclare() (n Node, err error) {
 	return
 }
 
+func (p *Parser) parseInclude() (n Node, err error) {
+	t := p.getToken()
+	if t.Type != TokenInclude {
+		err = p.errUnexpected("include")
+		return
+	}
+	p.consume()
+
+	t = p.getToken()
+	if t.Type != TokenLeftParen {
+		err = p.errUnexpected("(")
+		return
+	}
+	p.consume()
+
+	name, err := p.ParseExpr()
+	if err != nil {
+		return
+	}
+
+	t = p.getToken()
+	if t.Type != TokenRightParen {
+		err = p.errUnexpected(")")
+		return
+	}
+	p.consume()
+
+	n = &IncludeNode{name}
+	return
+}
+
+var discardEndTokenMap = map[TokenType]bool{
+	TokenEndDiscard: true,
+}
+
+func (p *Parser) parseDiscard() (n Node, err error) {
+	t := p.getToken()
+	if t.Type != TokenDiscard {
+		err = p.errUnexpected("discard")
+		return
+	}
+	p.consume()
+
+	body, err := p.parseStmtList(discardEndTokenMap)
+	if err != nil {
+		return
+	}
+	p.consume()
+
+	n = &DiscardNode{body}
+	return
+}
+
 func (p *Parser) ParseStmt() (n Node, err error) {
 	t := p.getToken()
 	switch t.Type {
-	case TokenTemplate:
+	case TokenBlock:
 		n, err = p.parseTemplate()
 	case TokenIf:
 		n, err = p.parseIf()
@@ -669,6 +722,10 @@ func (p *Parser) ParseStmt() (n Node, err error) {
 		n, err = p.parseFor()
 	case TokenDeclare:
 		n, err = p.parseDeclare()
+	case TokenInclude:
+		n, err = p.parseInclude()
+	case TokenDiscard:
+		n, err = p.parseDiscard()
 	default:
 		n, err = p.ParseExpr()
 	}

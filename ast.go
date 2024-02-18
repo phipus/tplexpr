@@ -64,7 +64,7 @@ type NumberNode struct {
 	Value string
 }
 
-type TemplateNode struct {
+type BlockNode struct {
 	Name string
 	Args []string
 	Body []Node
@@ -88,5 +88,13 @@ type DeclareNode struct {
 type ForNode struct {
 	Var  string
 	Expr Node
+	Body []Node
+}
+
+type IncludeNode struct {
+	Name Node
+}
+
+type DiscardNode struct {
 	Body []Node
 }

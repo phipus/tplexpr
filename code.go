@@ -42,6 +42,8 @@ const (
 	endScope
 	pushOutputFilter
 	popOutputFilter
+	includeTemplate
+	includeTemplateDyn
 )
 
 // Compare constants

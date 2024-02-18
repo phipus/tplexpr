@@ -1,11 +1,12 @@
 package html
 
 import (
-	"strings"
+	"io/fs"
+	"os"
+	"path"
 	"testing"
 
 	"github.com/phipus/tplexpr"
-	"golang.org/x/net/html"
 )
 
 func TestCompile(t *testing.T) {
@@ -74,6 +75,31 @@ func TestCompile(t *testing.T) {
 			`,
 			vars: tplexpr.Vars{"name": tplexpr.S("World")},
 		},
+		{
+			name: "Iterate (tx-for)",
+			doc: `
+				<ul>
+					<tx-for var="i" expr="${range(1, 6)}">
+						<li>$i</li>
+					</tx-for>
+				</ul>
+			`,
+			expected: `
+				<ul>
+					
+						<li>1</li>
+					
+						<li>2</li>
+					
+						<li>3</li>
+					
+						<li>4</li>
+					
+						<li>5</li>
+					
+				</ul>
+			`,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -87,6 +113,7 @@ func TestCompile(t *testing.T) {
 		}
 
 		code, c := ctx.Compile()
+		tplexpr.AddBuiltins(&c)
 		for name, value := range testCase.vars {
 			c.Declare(name, value)
 		}
@@ -96,39 +123,52 @@ func TestCompile(t *testing.T) {
 			continue
 		}
 
-		foundNode, err := html.Parse(strings.NewReader(str))
+		if str != testCase.expected {
+			t.Errorf("expected '%s', found '%s'", testCase.expected, str)
+		}
+	}
+}
+
+func TestCompileFiles(t *testing.T) {
+	fsys, err := fs.Sub(os.DirFS("testdata"), "templates")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ctx := tplexpr.NewCompileContext()
+	err = CompileGlobFS(fsys, "*.html", &ctx)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, c := ctx.Compile()
+	tplexpr.AddBuiltins(&c)
+
+	templates := []string{
+		"test1.html",
+	}
+
+	for _, tpl := range templates {
+		t.Logf("eval template %s", tpl)
+		str, err := c.EvalTemplateString(tpl, nil)
 		if err != nil {
 			t.Error(err)
-			t.Log("Produced invalid html")
 			continue
 		}
 
-		expectedNode, err := html.Parse(strings.NewReader(testCase.expected))
-		if err != nil {
-			t.Error(err)
-			t.Log("Expected invalid html")
-			continue
-		}
+		os.WriteFile(path.Join("testdata/tmp", tpl), []byte(str), 0644)
 
-		foundSB := strings.Builder{}
-		err = html.Render(&foundSB, foundNode)
+		expected, err := os.ReadFile(path.Join("testdata/results", tpl))
 		if err != nil {
 			t.Error(err)
 			continue
 		}
-
-		expectedSB := strings.Builder{}
-		err = html.Render(&expectedSB, expectedNode)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
-
-		found := foundSB.String()
-		expected := expectedSB.String()
-
-		if found != expected {
-			t.Errorf("expected '%s', found '%s'", expected, found)
+		if str != string(expected) {
+			t.Error("expected:")
+			t.Error(string(expected))
+			t.Error("found:")
+			t.Error(str)
 		}
 	}
 }

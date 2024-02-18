@@ -561,15 +561,17 @@ type Subprog struct {
 }
 
 type Context struct {
-	vars          map[string]Value
-	shadowed      []namedVar
-	scope         int
-	prevScopes    []int
-	subprogs      []Subprog
-	iters         []ValueIter
-	valueFilters  []ValueFilter
-	outputFilters []ValueFilter
-	NameError     func(name string) (Value, error)
+	vars             map[string]Value
+	shadowed         []namedVar
+	scope            int
+	prevScopes       []int
+	subprogs         []Subprog
+	iters            []ValueIter
+	valueFilters     []ValueFilter
+	outputFilters    []ValueFilter
+	templates        map[string]Template
+	NameError        func(name string) (Value, error)
+	TemplateNotFound func(name string) error
 }
 
 func NewContext() Context {
@@ -584,7 +586,10 @@ func (c *Context) Clone() *Context {
 		clone.vars[name] = value
 	}
 	clone.subprogs = c.subprogs
+	clone.valueFilters = c.valueFilters
+	clone.templates = c.templates
 	clone.NameError = c.NameError
+	clone.TemplateNotFound = c.TemplateNotFound
 	return &clone
 }
 
@@ -859,7 +864,21 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 		case popOutputFilter:
 			pushedOutputFilters--
 			c.outputFilters = c.outputFilters[:len(c.outputFilters)-1]
-
+		case includeTemplate:
+			err = evalTemplate(c, instr.sarg, wr)
+			if err != nil {
+				return
+			}
+		case includeTemplateDyn:
+			nameValue := stack.Pop()
+			name, err := nameValue.String()
+			if err != nil {
+				return err
+			}
+			err = evalTemplate(c, name, wr)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -917,6 +936,16 @@ func evalNumber(c *Context, instr Instr) (value Value) {
 	return
 }
 
+func evalTemplate(c *Context, name string, wr ValueWriter) (err error) {
+	tpl, ok := c.templates[name]
+	if ok {
+		err = EvalRaw(c, tpl.Code, wr)
+	} else if c.TemplateNotFound != nil {
+		err = c.TemplateNotFound(name)
+	}
+	return
+}
+
 type stringBuilder struct {
 	c *Context
 	b strings.Builder
@@ -949,6 +978,23 @@ func EvalString(c *Context, code []Instr) (string, error) {
 	return b.String(), err
 }
 
+func (c *Context) EvalTemplateRaw(name string, vars Vars, wr ValueWriter) error {
+	c.BeginScope()
+	defer c.EndScope()
+
+	for name, value := range vars {
+		c.Declare(name, value)
+	}
+
+	return evalTemplate(c, name, wr)
+}
+
+func (c *Context) EvalTemplateString(name string, vars Vars) (string, error) {
+	b := stringBuilder{c: c}
+	err := c.EvalTemplateRaw(name, vars, &b)
+	return b.String(), err
+}
+
 type outputWriter struct {
 	c *Context
 	w io.Writer
@@ -974,9 +1020,15 @@ func (w *outputWriter) WriteValue(v Value) error {
 	return err
 }
 
-func EvalWriter(c *Context, code []Instr) error {
-	w := outputWriter{}
+func EvalWriter(c *Context, code []Instr, wr io.Writer) error {
+	w := outputWriter{c: c, w: wr}
 	err := EvalRaw(c, code, &w)
+	return err
+}
+
+func (c *Context) EvalTemplateWriter(name string, vars Vars, wr io.Writer) error {
+	w := outputWriter{c: c, w: wr}
+	err := c.EvalTemplateRaw(name, vars, &w)
 	return err
 }
 

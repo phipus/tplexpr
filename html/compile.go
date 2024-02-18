@@ -2,10 +2,11 @@ package html
 
 import (
 	"io"
+	"io/fs"
+	"os"
 	"strings"
 
 	"github.com/phipus/tplexpr"
-	"golang.org/x/net/html"
 )
 
 func Compile(r io.Reader, ctx *tplexpr.CompileContext, mode int) (err error) {
@@ -23,10 +24,48 @@ func CompileString(s string, ctx *tplexpr.CompileContext, mode int) (err error) 
 	return Compile(r, ctx, mode)
 }
 
-func CompileNode(h *html.Node, ctx *tplexpr.CompileContext, mode int) error {
-	n, err := ParseNode(h)
+func CompileTemplate(name string, r io.Reader, ctx *tplexpr.CompileContext) error {
+	n, err := ParseReader(r)
 	if err != nil {
 		return err
 	}
-	return n.Compile(ctx, mode)
+	return ctx.CompileTemplate(name, n)
+}
+
+func CompileTemplateString(name, s string, ctx *tplexpr.CompileContext) error {
+	r := strings.NewReader(s)
+	return CompileTemplate(name, r, ctx)
+}
+
+func CompileGlobFS(fsys fs.FS, pattern string, ctx *tplexpr.CompileContext) error {
+	files, err := fs.Glob(fsys, pattern)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		err = CompileFSFile(fsys, file, ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func CompileFSFile(fsys fs.FS, fileName string, ctx *tplexpr.CompileContext) error {
+	file, err := fsys.Open(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return CompileTemplate(fileName, file, ctx)
+}
+
+func CompileFile(fileName string, ctx *tplexpr.CompileContext) error {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return CompileTemplate(fileName, file, ctx)
 }

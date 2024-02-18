@@ -1,0 +1,14 @@
+<tx-discard>
+    <tx-declare name="title">Hello 1</tx-declare>
+
+    <tx-block name="content">
+        <div class="test">
+            <ul>
+                <tx-for var="item" expr="${range(1, 11)}">
+                    <li class="">${item}</li>
+                </tx-for>
+            </ul>
+        </div>
+    </tx-block>
+    
+</tx-discard><tx-slot expr="${include('layout.html')}"></tx-slot>

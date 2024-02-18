@@ -1,16 +1,23 @@
 package tplexpr
 
+import (
+	"errors"
+	"fmt"
+)
+
 type CompileContext struct {
 	code           []Instr
 	subprogs       []Subprog
 	loopJumps      *[]loopJump
 	valueFilters   []ValueFilter
 	valueFilterMap map[ValueFilter]int
+	templates      map[string]Template
 }
 
 func NewCompileContext() CompileContext {
 	return CompileContext{
 		valueFilterMap: map[ValueFilter]int{},
+		templates:      map[string]Template{},
 	}
 }
 
@@ -23,6 +30,33 @@ type ValueFilter interface {
 	Filter(s string) (string, error)
 }
 
+var ErrTemplateExists = errors.New("template exists already")
+
+func (c *CompileContext) CompileTemplate(name string, node Node) error {
+	_, ok := c.templates[name]
+	if ok {
+		return fmt.Errorf("create template '%s': %w", name, ErrTemplateExists)
+	}
+	defer c.setCode(c.code)
+	c.code = nil
+
+	err := node.Compile(c, CompileEmit)
+	if err != nil {
+		return err
+	}
+	c.templates[name] = Template{c.code}
+	return nil
+}
+
+func (c *CompileContext) ParseTemplate(name string, data []byte) error {
+	p := NewParser(data)
+	n, err := p.Parse()
+	if err != nil {
+		return err
+	}
+	return c.CompileTemplate(name, n)
+}
+
 func (c *CompileContext) setCode(code []Instr) {
 	c.code = code
 }
@@ -31,21 +65,21 @@ func (c *CompileContext) setLoopJumps(loopJumps *[]loopJump) {
 	c.loopJumps = loopJumps
 }
 
-func (c *CompileContext) PushInstr(op, iarg int, sarg string) {
+func (c *CompileContext) pushInstr(op, iarg int, sarg string) {
 	c.code = append(c.code, Instr{op, iarg, sarg})
 }
 
 func (c *CompileContext) Value(mode int, value string) {
 	switch mode {
 	case CompileEmit:
-		c.PushInstr(emit, 0, value)
+		c.pushInstr(emit, 0, value)
 	case CompilePush:
-		c.PushInstr(push, 0, value)
+		c.pushInstr(push, 0, value)
 	}
 }
 
 func (c *CompileContext) EmitValue(value string) {
-	c.PushInstr(emit, 0, value)
+	c.pushInstr(emit, 0, value)
 }
 
 func (c *CompileContext) Code() []Instr {
@@ -78,71 +112,80 @@ func (c *CompileContext) WithLoopJumps(loopJumps *[]loopJump, f func() error) er
 func (c *CompileContext) Var(mode int, name string) {
 	switch mode {
 	case CompileEmit:
-		c.PushInstr(emitFetch, 0, name)
+		c.pushInstr(emitFetch, 0, name)
 	case CompilePush:
-		c.PushInstr(pushFetch, 0, name)
+		c.pushInstr(pushFetch, 0, name)
 	}
 }
 
 func (c *CompileContext) Call(mode int, name string, argc int) {
 	switch mode {
 	case CompileEmit:
-		c.PushInstr(emitCall, argc, name)
+		c.pushInstr(emitCall, argc, name)
 	case CompilePush:
-		c.PushInstr(pushCall, argc, name)
+		c.pushInstr(pushCall, argc, name)
+	}
+}
+
+func (c *CompileContext) DynCall(mode int, argc int) {
+	switch mode {
+	case CompileEmit:
+		c.pushInstr(emitCallDyn, argc, "")
+	case CompilePush:
+		c.pushInstr(pushCallDyn, argc, "")
 	}
 }
 
 func (c *CompileContext) Subprog(mode int, subprogIdx int) {
 	switch mode {
 	case CompileEmit:
-		c.PushInstr(emitSubprog, subprogIdx, "")
+		c.pushInstr(emitSubprog, subprogIdx, "")
 	case CompilePush:
-		c.PushInstr(pushSubprog, subprogIdx, "")
+		c.pushInstr(pushSubprog, subprogIdx, "")
 	}
 }
 
 func (c *CompileContext) Attr(mode int, name string) {
 	switch mode {
 	case CompileEmit:
-		c.PushInstr(emitAttr, 0, name)
+		c.pushInstr(emitAttr, 0, name)
 	case CompilePush:
-		c.PushInstr(pushAttr, 0, name)
+		c.pushInstr(pushAttr, 0, name)
 	}
 }
 
 func (c *CompileContext) Compare(mode int, cmp int) {
 	switch mode {
 	case CompileEmit:
-		c.PushInstr(emitCompare, cmp, "")
+		c.pushInstr(emitCompare, cmp, "")
 	case CompilePush:
-		c.PushInstr(pushCompare, cmp, "")
+		c.pushInstr(pushCompare, cmp, "")
 	}
 }
 
 func (c *CompileContext) PushPeek() {
-	c.PushInstr(pushPeek, 0, "")
+	c.pushInstr(pushPeek, 0, "")
 }
 
 func (c *CompileContext) DiscardPop() {
-	c.PushInstr(discardPop, 0, "")
+	c.pushInstr(discardPop, 0, "")
 }
 
 func (c *CompileContext) BinaryOP(mode int, op int) {
 	switch mode {
 	case CompileEmit:
-		c.PushInstr(emitBinaryOP, op, "")
+		c.pushInstr(emitBinaryOP, op, "")
 	case CompilePush:
-		c.PushInstr(pushBinaryOP, op, "")
+		c.pushInstr(pushBinaryOP, op, "")
 	}
 }
 
 func (c *CompileContext) Number(mode int, value string) {
 	switch mode {
 	case CompileEmit:
-		c.PushInstr(emitNumber, 0, value)
+		c.pushInstr(emitNumber, 0, value)
 	case CompilePush:
-		c.PushInstr(pushNumber, 0, value)
+		c.pushInstr(pushNumber, 0, value)
 	}
 }
 
@@ -151,12 +194,13 @@ func (c *CompileContext) PushOutputFilter(f ValueFilter) {
 	if !ok {
 		idx = len(c.valueFilters)
 		c.valueFilters = append(c.valueFilters, f)
+		c.valueFilterMap[f] = idx
 	}
-	c.PushInstr(pushOutputFilter, idx, "")
+	c.pushInstr(pushOutputFilter, idx, "")
 }
 
 func (c *CompileContext) PopOutputFilter() {
-	c.PushInstr(popOutputFilter, 0, "")
+	c.pushInstr(popOutputFilter, 0, "")
 }
 
 func (c *CompileContext) Compile() (code []Instr, ctx Context) {
@@ -164,6 +208,10 @@ func (c *CompileContext) Compile() (code []Instr, ctx Context) {
 	ctx = NewContext()
 	ctx.subprogs = c.subprogs
 	ctx.valueFilters = c.valueFilters
+	ctx.templates = map[string]Template{}
+	for name, tpl := range c.templates {
+		ctx.templates[name] = tpl
+	}
 	return
 }
 
@@ -186,6 +234,21 @@ func (n *CallNode) Compile(ctx *CompileContext, mode int) error {
 	}
 
 	ctx.Call(mode, n.Name, len(n.Args))
+	return nil
+}
+
+func (n *DynCallNode) Compile(ctx *CompileContext, mode int) error {
+	err := n.Value.Compile(ctx, CompilePush)
+	if err != nil {
+		return err
+	}
+	for _, arg := range n.Args {
+		err = arg.Compile(ctx, CompilePush)
+		if err != nil {
+			return err
+		}
+	}
+	ctx.DynCall(mode, len(n.Args))
 	return nil
 }
 
@@ -246,8 +309,8 @@ func (n *AndNode) Compile(ctx *CompileContext, mode int) error {
 
 		if i != lastIdx {
 			jumpLabels = append(jumpLabels, len(ctx.code))
-			ctx.PushInstr(jumpFalse, 0, "")
-			ctx.PushInstr(discardPop, 0, "")
+			ctx.pushInstr(jumpFalse, 0, "")
+			ctx.pushInstr(discardPop, 0, "")
 		}
 	}
 
@@ -257,7 +320,7 @@ func (n *AndNode) Compile(ctx *CompileContext, mode int) error {
 
 	switch mode {
 	case CompileEmit:
-		ctx.PushInstr(emitPop, 0, "")
+		ctx.pushInstr(emitPop, 0, "")
 	}
 	return nil
 }
@@ -274,8 +337,8 @@ func (n *OrNode) Compile(ctx *CompileContext, mode int) error {
 
 		if i != lastIdx {
 			jumpLabels = append(jumpLabels, len(ctx.code))
-			ctx.PushInstr(jumpTrue, 0, "")
-			ctx.PushInstr(discardPop, 0, "")
+			ctx.pushInstr(jumpTrue, 0, "")
+			ctx.pushInstr(discardPop, 0, "")
 		}
 	}
 
@@ -285,7 +348,7 @@ func (n *OrNode) Compile(ctx *CompileContext, mode int) error {
 
 	switch mode {
 	case CompileEmit:
-		ctx.PushInstr(emitPop, 0, "")
+		ctx.pushInstr(emitPop, 0, "")
 	}
 	return nil
 }
@@ -319,7 +382,7 @@ func (n *NumberNode) Compile(ctx *CompileContext, mode int) error {
 	return nil
 }
 
-func (n *TemplateNode) Compile(ctx *CompileContext, mode int) error {
+func (n *BlockNode) Compile(ctx *CompileContext, mode int) error {
 	subprog, err := ctx.WithSubprog(n.Args, func() error {
 		for _, n := range n.Body {
 			err := n.Compile(ctx, CompileEmit)
@@ -334,7 +397,7 @@ func (n *TemplateNode) Compile(ctx *CompileContext, mode int) error {
 	}
 
 	ctx.Subprog(CompilePush, subprog)
-	ctx.PushInstr(declarePop, 0, n.Name)
+	ctx.pushInstr(declarePop, 0, n.Name)
 	return nil
 }
 
@@ -356,7 +419,7 @@ func (n *IfNode) Compile(ctx *CompileContext, mode int) (err error) {
 	for i := range n.Branches {
 		if i != 0 {
 			// discard expr from previous branch
-			ctx.PushInstr(discardPop, 0, "")
+			ctx.pushInstr(discardPop, 0, "")
 		}
 
 		b := &n.Branches[i]
@@ -369,9 +432,9 @@ func (n *IfNode) Compile(ctx *CompileContext, mode int) (err error) {
 
 		// jump to the start of the next branch
 		jumpLabels = append(jumpLabels, jumpLabel{len(ctx.code), i, labelNextBranchStart})
-		ctx.PushInstr(jumpFalse, 0, "")
+		ctx.pushInstr(jumpFalse, 0, "")
 
-		ctx.PushInstr(discardPop, 0, "")
+		ctx.pushInstr(discardPop, 0, "")
 		for _, n := range b.Body {
 			err = n.Compile(ctx, mode)
 			if err != nil {
@@ -380,12 +443,12 @@ func (n *IfNode) Compile(ctx *CompileContext, mode int) (err error) {
 		}
 
 		jumpLabels = append(jumpLabels, jumpLabel{len(ctx.code), i, labelEnd})
-		ctx.PushInstr(jump, 0, "")
+		ctx.pushInstr(jump, 0, "")
 	}
 
 	// discard expr from the last branch if it was skipped
 	if len(n.Branches) > 0 {
-		ctx.PushInstr(discardPop, 0, "")
+		ctx.pushInstr(discardPop, 0, "")
 	}
 
 	// compile the alternative (else) branch
@@ -418,7 +481,7 @@ func (n *DeclareNode) Compile(ctx *CompileContext, mode int) error {
 	if err != nil {
 		return err
 	}
-	ctx.PushInstr(declarePop, 0, n.Name)
+	ctx.pushInstr(declarePop, 0, n.Name)
 	return nil
 }
 
@@ -429,13 +492,13 @@ func (n *ForNode) Compile(ctx *CompileContext, mode int) error {
 		return err
 	}
 
-	ctx.PushInstr(pushIter, 0, "")
-	ctx.PushInstr(beginScope, 0, "")
-	ctx.PushInstr(push, 0, "")
-	ctx.PushInstr(declarePop, 0, n.Var)
+	ctx.pushInstr(pushIter, 0, "")
+	ctx.pushInstr(beginScope, 0, "")
+	ctx.pushInstr(push, 0, "")
+	ctx.pushInstr(declarePop, 0, n.Var)
 
 	nextIndex := len(ctx.code)
-	ctx.PushInstr(iterNextOrJump, 0, n.Var)
+	ctx.pushInstr(iterNextOrJump, 0, n.Var)
 	err = ctx.WithLoopJumps(&loopJumps, func() error {
 		for _, n := range n.Body {
 			err := n.Compile(ctx, mode)
@@ -449,7 +512,7 @@ func (n *ForNode) Compile(ctx *CompileContext, mode int) error {
 		return err
 	}
 
-	ctx.PushInstr(jump, nextIndex-len(ctx.code)-1, "")
+	ctx.pushInstr(jump, nextIndex-len(ctx.code)-1, "")
 	endIndex := len(ctx.code)
 	ctx.code[nextIndex].iarg = endIndex - nextIndex - 1
 
@@ -462,5 +525,38 @@ func (n *ForNode) Compile(ctx *CompileContext, mode int) error {
 			ctx.code[jmp.idx].iarg = endIndex - jmp.idx - 1
 		}
 	}
+	return nil
+}
+
+func (n *IncludeNode) Compile(ctx *CompileContext, mode int) error {
+	if name, ok := n.Name.(*ValueNode); ok {
+		ctx.pushInstr(includeTemplate, 0, name.Value)
+	} else {
+		err := n.Name.Compile(ctx, CompilePush)
+		if err != nil {
+			return err
+		}
+		ctx.pushInstr(includeTemplateDyn, 0, "")
+	}
+	return nil
+}
+
+type discardFilter struct{}
+
+var DiscardFilter ValueFilter = discardFilter{}
+
+func (discardFilter) Filter(s string) (string, error) {
+	return "", nil
+}
+
+func (n *DiscardNode) Compile(ctx *CompileContext, mode int) error {
+	ctx.PushOutputFilter(DiscardFilter)
+	for _, n := range n.Body {
+		err := n.Compile(ctx, mode)
+		if err != nil {
+			return err
+		}
+	}
+	ctx.PopOutputFilter()
 	return nil
 }

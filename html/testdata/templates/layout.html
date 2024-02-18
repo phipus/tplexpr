@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>$title</title>
+    </head>
+    <body>
+        <div class="header">
+            <tx-slot expr="$header"></tx-slot>
+        </div>
+        <div class="content">
+            <tx-slot expr="$content">No content</tx-slot>
+        </div>
+        <div class="footer">
+            <tx-slot expr="$footer">
+                (c) tplexpr HTML
+            </tx-slot>
+        </div>
+    </body>
+</html>

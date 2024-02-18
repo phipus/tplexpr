@@ -45,8 +45,8 @@ func TestEval(t *testing.T) {
 		{`${declare(name, "Sina") %}  Hello $name`, "Hello Sina", nil},
 		{`${list("a", "b", "c", "1")}`, "a b c 1", nil},
 		{`${for x in list("1", "2", "3") do "$x" endfor}`, "123", nil},
-		{`${template(tpl, name)}Hello $name${endtemplate}`, "", nil},
-		{`${template(tpl, name)}Hello $name${endtemplate}${tpl("World")}`, "Hello World", nil},
+		{`${block(tpl, name)}Hello $name${endblock}`, "", nil},
+		{`${block(tpl, name)}Hello $name${endblock}${tpl("World")}`, "Hello World", nil},
 		{`${if false then "A" elseif true then "B" else "C" endif}`, "B", nil},
 		{`${if true then "A" elseif true then "B" else "C" endif}`, "A", nil},
 		{`${if true then "A" elseif false then "B" else "C" endif}`, "A", nil},
@@ -92,5 +92,68 @@ func TestEval(t *testing.T) {
 		if result != testCase.result {
 			t.Errorf("expected '%s', got '%s'", testCase.result, result)
 		}
+	}
+}
+
+func TestEvalTemplate(t *testing.T) {
+	evalTest("include 1").
+		Template("baseFuncs",
+			`${discard}
+				${block(hello, name)}Hello $name${endblock}
+				${declare(greet, (name) => "Hello $name")}
+			${enddiscard}`,
+		).
+		Template("main",
+			`${include("baseFuncs")%} ${hello("World")} ${greet("Sina")}`,
+		).
+		Eval(t, "main",
+			`Hello World Hello Sina`,
+		)
+}
+
+type evalTestImpl struct {
+	name      string
+	templates map[string]string
+	vars      Vars
+}
+
+func evalTest(name string) *evalTestImpl {
+	return &evalTestImpl{name: name, templates: map[string]string{}, vars: map[string]Value{}}
+}
+
+func (t *evalTestImpl) Template(name string, value string) *evalTestImpl {
+	t.templates[name] = value
+	return t
+}
+
+func (t *evalTestImpl) Var(name string, value Value) *evalTestImpl {
+	t.vars[name] = value
+	return t
+}
+
+func (t *evalTestImpl) VarString(name string, value string) *evalTestImpl {
+	return t.Var(name, StringValue(value))
+}
+
+func (t *evalTestImpl) Eval(tt *testing.T, templateName string, expectedResult string) {
+	tt.Logf("run eval test %s", t.name)
+	cc := NewCompileContext()
+	for name, value := range t.templates {
+		err := cc.ParseTemplate(name, []byte(value))
+		if err != nil {
+			tt.Error(err)
+			return
+		}
+	}
+
+	_, c := cc.Compile()
+	result, err := c.EvalTemplateString(templateName, t.vars)
+	if err != nil {
+		tt.Error(err)
+		return
+	}
+
+	if result != expectedResult {
+		tt.Errorf("expected '%s', got '%s'", expectedResult, result)
 	}
 }
