@@ -1,6 +1,9 @@
 package tplexpr
 
-import "net/http"
+import (
+	"io"
+	"net/http"
+)
 
 type Vars = map[string]Value
 
@@ -8,8 +11,26 @@ type Template struct {
 	Code []Instr
 }
 
-func (c *Context) RenderTemplateHTML(status int, w http.ResponseWriter, name string, vars Vars) error {
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(status)
-	return c.EvalTemplateWriter(name, vars, w)
+type Store interface {
+	Render(w io.Writer, name string, vars Vars) error
 }
+
+type WebStore struct {
+	Store        Store
+	ContentTypes ContentTypeResolver
+}
+
+type ContentTypeResolver interface {
+	ResolveContentType(name string) (string, bool)
+}
+
+func (s *WebStore) Render(w http.ResponseWriter, status int, name string, vars Vars) error {
+	contentType, ok := s.ContentTypes.ResolveContentType(name)
+	if ok {
+		w.Header().Set("Content-Type", contentType)
+	}
+	w.WriteHeader(status)
+	return s.Store.Render(w, name, vars)
+}
+
+func ResolveContentType(name string)
