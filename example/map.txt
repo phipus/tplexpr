@@ -1,1 +1,5 @@
-${items."$it CHF"}
+${declare(obj, object(a => 1, b => 2))}
+${declare(obj2, object(obj, x => 3))}
+
+${list(1, 2, 3, 4).map((x, i) => "${}- $x")}
+jjfksjféksajfé

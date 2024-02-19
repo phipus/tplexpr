@@ -81,6 +81,83 @@ func (p *Parser) parseAtom() (n Node, err error) {
 		_, err = strconv.ParseFloat(value, 64)
 		n = &NumberNode{value}
 		return
+	case TokenObject:
+		p.consume()
+
+		t = p.getToken()
+		if t.Type != TokenLeftParen {
+			err = p.errUnexpected("(")
+			return
+		}
+		p.consume()
+
+		t = p.getToken()
+		if t.Type == TokenRightParen {
+			p.consume()
+			n = &ObjectNode{}
+			return
+		}
+		var extend Node
+		if p.getToken().Type != TokenIdent || p.lookAhead(1).Type != TokenArrow {
+			extend, err = p.ParseExpr()
+			if err != nil {
+				return
+			}
+			t = p.getToken()
+			switch t.Type {
+			case TokenRightParen:
+				p.consume()
+				n = &ObjectNode{extend, nil}
+				return
+			case TokenComma:
+				p.consume()
+			default:
+				err = p.errUnexpected(", | )")
+				return
+			}
+		}
+
+		keys := []ObjectKey{}
+		for {
+			t = p.getToken()
+			if t.Type == TokenRightParen {
+				break
+			}
+			if t.Type != TokenIdent {
+				err = p.errUnexpected("identifier")
+				return
+			}
+			key := string(t.Value)
+			p.consume()
+
+			t = p.getToken()
+			if t.Type != TokenArrow {
+				err = p.errUnexpected("=>")
+				return
+			}
+			p.consume()
+
+			var value Node
+			value, err = p.ParseExpr()
+			if err != nil {
+				return
+			}
+
+			keys = append(keys, ObjectKey{key, value})
+
+			t = p.getToken()
+			if t.Type != TokenComma {
+				break
+			}
+			p.consume()
+		}
+		if t.Type != TokenRightParen {
+			err = p.errUnexpected(")")
+			return
+		}
+		p.consume()
+		n = &ObjectNode{extend, keys}
+		return
 	case TokenLeftParen:
 		// find the matching closing paren
 		open := 1

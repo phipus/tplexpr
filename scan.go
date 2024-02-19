@@ -49,6 +49,7 @@ const (
 	TokenInclude
 	TokenDiscard
 	TokenEndDiscard
+	TokenObject
 	TokenError
 )
 
@@ -83,6 +84,7 @@ var keywordMap = map[string]TokenType{
 	"include":    TokenInclude,
 	"discard":    TokenDiscard,
 	"enddiscard": TokenEndDiscard,
+	"object":     TokenObject,
 }
 
 var (

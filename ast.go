@@ -98,3 +98,13 @@ type IncludeNode struct {
 type DiscardNode struct {
 	Body []Node
 }
+
+type ObjectKey struct {
+	Key   string
+	Value Node
+}
+
+type ObjectNode struct {
+	Extend Node
+	Keys   []ObjectKey
+}

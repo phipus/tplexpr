@@ -58,13 +58,42 @@ type Value interface {
 	String() (string, error)
 	List() ([]Value, error)
 	Iter() (ValueIter, error)
-	Keys() []string
-	GetAttr(name string) (Value, bool)
+	Object() (Object, error)
 	Call(args Args, wr ValueWriter) error
 }
 
 type ValueIter interface {
 	Next() (Value, bool, error)
+}
+
+type Object interface {
+	Key(name string) (Value, bool)
+	SetKey(name string, value Value)
+	Keys() []string
+}
+
+type MapObject struct {
+	M map[string]Value
+}
+
+func (m *MapObject) Key(name string) (v Value, ok bool) {
+	v, ok = m.M[name]
+	return
+}
+
+func (m *MapObject) SetKey(name string, value Value) {
+	if m.M == nil {
+		m.M = map[string]Value{}
+	}
+	m.M[name] = value
+}
+
+func (m *MapObject) Keys() []string {
+	keys := make([]string, 0, len(m.M))
+	for key := range m.M {
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 const (
@@ -120,12 +149,8 @@ func (b BoolValue) Iter() (ValueIter, error) {
 	return &singleValueIter{b}, nil
 }
 
-func (b BoolValue) Keys() []string {
-	return nil
-}
-
-func (b BoolValue) GetAttr(name string) (Value, bool) {
-	return nil, false
+func (b BoolValue) Object() (Object, error) {
+	return &MapObject{}, nil
 }
 
 func (b BoolValue) Call(args Args, wr ValueWriter) error {
@@ -158,12 +183,8 @@ func (n NumberValue) Iter() (ValueIter, error) {
 	return &singleValueIter{n}, nil
 }
 
-func (n NumberValue) Keys() []string {
-	return nil
-}
-
-func (n NumberValue) GetAttr(name string) (Value, bool) {
-	return nil, false
+func (n NumberValue) Object() (Object, error) {
+	return &MapObject{}, nil
 }
 
 func (n NumberValue) Call(args Args, wr ValueWriter) error {
@@ -198,12 +219,8 @@ func (s StringValue) Iter() (ValueIter, error) {
 	return &singleValueIter{s}, nil
 }
 
-func (s StringValue) Keys() []string {
-	return nil
-}
-
-func (s StringValue) GetAttr(name string) (Value, bool) {
-	return nil, false
+func (s StringValue) Object() (Object, error) {
+	return &MapObject{}, nil
 }
 
 func (s StringValue) Call(args Args, wr ValueWriter) error {
@@ -249,25 +266,35 @@ func (l ListValue) Iter() (ValueIter, error) {
 	return &listIter{l}, nil
 }
 
-func (l ListValue) Keys() []string {
-	keys := make([]string, len(l))
-	for i := range l {
+type ListObject struct {
+	L []Value
+}
+
+func (l *ListObject) Key(name string) (Value, bool) {
+	idx, err := strconv.ParseInt(name, 10, 64)
+	if err == nil && idx < int64(len(l.L)) {
+		return l.L[int(idx)], true
+	}
+	return nil, false
+}
+
+func (l *ListObject) SetKey(name string, value Value) {
+	idx, err := strconv.ParseInt(name, 10, 64)
+	if err == nil && idx < int64(len(l.L)) {
+		l.L[int(idx)] = value
+	}
+}
+
+func (l *ListObject) Keys() []string {
+	keys := make([]string, len(l.L))
+	for i := range l.L {
 		keys[i] = fmt.Sprintf("%d", i)
 	}
 	return keys
 }
 
-func (l ListValue) GetAttr(name string) (Value, bool) {
-	idx, err := strconv.ParseInt(name, 10, 64)
-	if err != nil {
-		return nil, false
-	}
-
-	if idx < int64(len(l)) {
-		return l[int(idx)], true
-	}
-
-	return nil, false
+func (l ListValue) Object() (Object, error) {
+	return &ListObject{l}, nil
 }
 
 func (l ListValue) Call(args Args, wr ValueWriter) error {
@@ -319,17 +346,8 @@ func (o ObjectValue) Iter() (ValueIter, error) {
 	return &listIter{keys}, nil
 }
 
-func (o ObjectValue) Keys() []string {
-	keys := make([]string, 0, len(o))
-	for key := range o {
-		keys = append(keys, key)
-	}
-	return keys
-}
-
-func (o ObjectValue) GetAttr(name string) (v Value, ok bool) {
-	v, ok = o[name]
-	return
+func (o ObjectValue) Object() (Object, error) {
+	return &MapObject{o}, nil
 }
 
 func (o ObjectValue) Call(args Args, wr ValueWriter) error {
@@ -376,12 +394,8 @@ func (f FuncValue) Iter() (ValueIter, error) {
 	return value.Iter()
 }
 
-func (f FuncValue) Keys() []string {
-	return nil
-}
-
-func (f FuncValue) GetAttr(name string) (Value, bool) {
-	return nil, false
+func (f FuncValue) Object() (Object, error) {
+	return &MapObject{}, nil
 }
 
 func (f FuncValue) Call(args Args, wr ValueWriter) error {
@@ -458,12 +472,8 @@ func (v IterValue) Iter() (ValueIter, error) {
 	return v.I, nil
 }
 
-func (v IterValue) Keys() []string {
-	return nil
-}
-
-func (v IterValue) GetAttr(name string) (Value, bool) {
-	return nil, false
+func (v IterValue) Object() (Object, error) {
+	return &MapObject{}, nil
 }
 
 func (v IterValue) Call(args Args, wr ValueWriter) error {
@@ -543,16 +553,57 @@ func (s *subprogValue) Iter() (ValueIter, error) {
 	return &singleValueIter{StringValue(value)}, nil
 }
 
-func (s *subprogValue) Keys() []string {
-	return nil
-}
-
-func (s *subprogValue) GetAttr(name string) (Value, bool) {
-	return nil, false
+func (s *subprogValue) Object() (Object, error) {
+	return &MapObject{}, nil
 }
 
 func (s *subprogValue) Call(args Args, wr ValueWriter) error {
 	return s.eval(args, wr)
+}
+
+type objectMapper struct {
+	o Object
+}
+
+var _ Value = objectMapper{}
+
+func (o objectMapper) Kind() ValueKind {
+	return KindObject
+}
+
+func (o objectMapper) Bool() bool {
+	return true
+}
+
+func (o objectMapper) Number() (float64, error) {
+	return 0, &ErrType{opConvert, KindObjectName, conTO, KindNumberName}
+}
+
+func (o objectMapper) String() (string, error) {
+	return strings.Join(o.o.Keys(), " "), nil
+}
+
+func (o objectMapper) List() ([]Value, error) {
+	keys := o.o.Keys()
+	values := make([]Value, len(keys))
+	for i := range keys {
+		values[i] = StringValue(keys[i])
+	}
+	return values, nil
+}
+
+func (o objectMapper) Iter() (ValueIter, error) {
+	values, _ := o.List()
+	return &listIter{values}, nil
+}
+
+func (o objectMapper) Object() (Object, error) {
+	return o.o, nil
+}
+
+func (o objectMapper) Call(args Args, wr ValueWriter) error {
+	wr.WriteValue(o)
+	return nil
 }
 
 type Subprog struct {
@@ -879,6 +930,60 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 			if err != nil {
 				return err
 			}
+		case assignKey:
+			value := stack.Pop()
+			if obj, ok := stack.Peek().(ObjectValue); ok && obj != nil {
+				obj[instr.sarg] = value
+			} else {
+				obj, err := stack.Pop().Object()
+				if err != nil {
+					return err
+				}
+				obj.SetKey(instr.sarg, value)
+				stack.Push(objectMapper{obj})
+			}
+		case assignKeyDyn:
+			value := stack.Pop()
+			key := stack.Pop()
+			keyStr, err := key.String()
+			if err != nil {
+				return err
+			}
+
+			if obj, ok := stack.Peek().(ObjectValue); ok && obj != nil {
+				obj[keyStr] = value
+			} else {
+				obj, err := stack.Pop().Object()
+				if err != nil {
+					return err
+				}
+
+				obj.SetKey(keyStr, value)
+				stack.Push(objectMapper{obj})
+			}
+		case pushObject:
+			stack.Push(ObjectValue{})
+		case extendObject:
+			obj, err := stack.Pop().Object()
+			if err != nil {
+				return err
+			}
+			newObj := ObjectValue{}
+			switch obj := obj.(type) {
+			case *MapObject:
+				for key, value := range obj.M {
+					newObj[key] = value
+				}
+			case *ListObject:
+				for i, v := range obj.L {
+					newObj[fmt.Sprintf("%d", i)] = v
+				}
+			default:
+				for _, key := range obj.Keys() {
+					newObj[key], _ = obj.Key(key)
+				}
+			}
+			stack.Push(newObj)
 		}
 	}
 	return nil
@@ -901,7 +1006,11 @@ func evalCallDyn(c *Context, stack *valueStack, instr Instr, wr ValueWriter) (er
 
 func evalAttr(c *Context, stack *valueStack, instr Instr) (value Value, err error) {
 	value = stack.Pop()
-	value, ok := value.GetAttr(instr.sarg)
+	obj, err := value.Object()
+	if err != nil {
+		return nil, err
+	}
+	value, ok := obj.Key(instr.sarg)
 	if !ok {
 		value, err = c.NameError(instr.sarg)
 	}

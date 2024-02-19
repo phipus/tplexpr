@@ -44,6 +44,10 @@ const (
 	popOutputFilter
 	includeTemplate
 	includeTemplateDyn
+	assignKey
+	assignKeyDyn
+	pushObject
+	extendObject
 )
 
 // Compare constants

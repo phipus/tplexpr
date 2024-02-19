@@ -217,14 +217,21 @@ handleObject:
 		}
 
 		// fallback
-		lkeys := a.Keys()
-		rkeys := b.Keys()
 
-		for _, key := range lkeys {
-			res[key], _ = a.GetAttr(key)
+		lObj, err := a.Object()
+		if err != nil {
+			return nil, err
 		}
-		for _, key := range rkeys {
-			res[key], _ = a.GetAttr(key)
+		rObj, err := b.Object()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, key := range lObj.Keys() {
+			res[key], _ = lObj.Key(key)
+		}
+		for _, key := range rObj.Keys() {
+			res[key], _ = rObj.Key(key)
 		}
 
 		return res, nil

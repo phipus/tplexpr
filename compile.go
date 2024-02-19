@@ -560,3 +560,27 @@ func (n *DiscardNode) Compile(ctx *CompileContext, mode int) error {
 	ctx.PopOutputFilter()
 	return nil
 }
+
+func (n *ObjectNode) Compile(ctx *CompileContext, mode int) error {
+	if n.Extend == nil {
+		ctx.pushInstr(pushObject, 0, "")
+	} else {
+		err := n.Extend.Compile(ctx, CompilePush)
+		if err != nil {
+			return err
+		}
+		ctx.pushInstr(extendObject, 0, "")
+	}
+	for _, key := range n.Keys {
+		err := key.Value.Compile(ctx, CompilePush)
+		if err != nil {
+			return err
+		}
+		ctx.pushInstr(assignKey, 0, key.Key)
+	}
+
+	if mode == CompileEmit {
+		ctx.pushInstr(emitPop, 0, "")
+	}
+	return nil
+}
