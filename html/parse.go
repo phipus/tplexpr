@@ -368,6 +368,8 @@ func parseSwitch(to *[]tplexpr.Node, s *Scanner) error {
 			}
 			*to = append(*to, n)
 			return nil
+		case t.Type == html.TextToken && len(strings.TrimSpace(t.Data)) == 0:
+			s.Consume()
 		default:
 			return errUnexpected(s, &t, "</tx-switch>")
 		}
