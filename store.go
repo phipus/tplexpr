@@ -37,13 +37,13 @@ func (s *watchStore) isExpired() bool {
 	for _, wf := range s.watchFiles {
 		s, err := fs.Stat(wf.fsys, wf.name)
 		if err != nil {
-			return false
+			return true
 		}
 		if !s.ModTime().Equal(wf.mtime) {
-			return false
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func (s *watchStore) parseTemplate(name string, data []byte, cc *CompileContext) error {
