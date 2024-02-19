@@ -18,6 +18,10 @@ type Plugin interface {
 	ParseTemplate(name string, data []byte, ctx *CompileContext) (compiled bool, err error)
 }
 
+func BuildStore() *StoreBuilder {
+	return &StoreBuilder{}
+}
+
 func (s *StoreBuilder) AddPlugin(p Plugin) *StoreBuilder {
 	s.plugins = append(s.plugins, p)
 	return s
