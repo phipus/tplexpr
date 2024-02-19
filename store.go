@@ -23,11 +23,12 @@ type watchFile struct {
 }
 
 type watchStore struct {
-	plugins    []Plugin
-	files      []storeFS
-	parsed     bool
-	c          Context
-	watchFiles []watchFile
+	plugins     []Plugin
+	files       []storeFS
+	parsed      bool
+	c           Context
+	watchFiles  []watchFile
+	addBuiltins bool
 }
 
 var _ Store = &watchStore{}
@@ -89,6 +90,9 @@ func (s *watchStore) parse() error {
 
 	s.parsed = true
 	_, s.c = cc.Compile()
+	if s.addBuiltins {
+		AddBuiltins(&s.c)
+	}
 	return nil
 }
 

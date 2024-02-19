@@ -3,9 +3,10 @@ package tplexpr
 import "io/fs"
 
 type StoreBuilder struct {
-	plugins []Plugin
-	files   []storeFS
-	watch   bool
+	plugins    []Plugin
+	files      []storeFS
+	watch      bool
+	noBuiltins bool
 }
 
 type storeFS struct {
@@ -27,8 +28,13 @@ func (s *StoreBuilder) AddFS(fsys fs.FS, globs ...string) *StoreBuilder {
 	return s
 }
 
-func (s *StoreBuilder) SetWatch(watch bool) *StoreBuilder {
+func (s *StoreBuilder) Watch(watch bool) *StoreBuilder {
 	s.watch = watch
+	return s
+}
+
+func (s *StoreBuilder) AddBuiltins(addBuiltins bool) *StoreBuilder {
+	s.noBuiltins = !addBuiltins
 	return s
 }
 
@@ -49,8 +55,9 @@ func (s *StoreBuilder) compileTemplate(name string, data []byte, cc *CompileCont
 func (s *StoreBuilder) Build() (Store, error) {
 	if s.watch {
 		return &watchStore{
-			plugins: s.plugins,
-			files:   s.files,
+			plugins:     s.plugins,
+			files:       s.files,
+			addBuiltins: !s.noBuiltins,
 		}, nil
 	}
 
@@ -76,5 +83,8 @@ func (s *StoreBuilder) Build() (Store, error) {
 	}
 
 	_, c := cc.Compile()
+	if !s.noBuiltins {
+		AddBuiltins(&c)
+	}
 	return &simpleStore{c}, nil
 }
