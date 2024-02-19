@@ -1,6 +1,7 @@
 package html
 
 import (
+	"bytes"
 	"io"
 	"io/fs"
 	"os"
@@ -68,4 +69,18 @@ func CompileFile(fileName string, ctx *tplexpr.CompileContext) error {
 	}
 	defer file.Close()
 	return CompileTemplate(fileName, file, ctx)
+}
+
+type Plugin struct{}
+
+var _ tplexpr.Plugin = Plugin{}
+
+func (Plugin) ParseTemplate(name string, data []byte, ctx *tplexpr.CompileContext) (bool, error) {
+	switch tplexpr.FileNameExtension(name) {
+	case ".html", ".htm":
+		err := ParseTemplateReader(ctx, name, bytes.NewReader(data))
+		return true, err
+	default:
+		return false, nil
+	}
 }

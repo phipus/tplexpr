@@ -40,7 +40,7 @@ func (s *WebStore) Render(w http.ResponseWriter, status int, name string, vars V
 	return s.Store.Render(w, name, vars)
 }
 
-func ResolveWebContentType(name string) (string, bool) {
+func FileNameExtension(name string) string {
 	ext := ""
 	switch dotIdx := strings.LastIndexByte(name, '.'); dotIdx {
 	case -1, 0:
@@ -48,6 +48,11 @@ func ResolveWebContentType(name string) (string, bool) {
 	default:
 		ext = name[dotIdx:]
 	}
+	return ext
+}
+
+func ResolveWebContentType(name string) (string, bool) {
+	ext := FileNameExtension(name)
 
 	contentType := ""
 	switch ext {
