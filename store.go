@@ -98,6 +98,7 @@ func (s *watchStore) parse() error {
 
 func (s *watchStore) Render(w io.Writer, name string, vars Vars) error {
 	if !s.parsed || s.isExpired() {
+		s.parsed = false
 		err := s.parse()
 		if err != nil {
 			return err
