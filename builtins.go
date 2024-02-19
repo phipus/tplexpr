@@ -197,6 +197,36 @@ func BuiltinRange(args Args) (Value, error) {
 	return IterValue{rng}, nil
 }
 
+func BuiltinAppend(args Args) (Value, error) {
+	lst, err := args.ArgDefault(0, EmptyListValue).List()
+	if err != nil {
+		return nil, err
+	}
+	clone := make(ListValue, 0, len(lst)+args.Argc()-1)
+	clone = append(clone, lst...)
+	for i := 1; i < args.Argc(); i++ {
+		clone = append(clone, args.Arg(i))
+	}
+	return clone, nil
+}
+
+func BuiltinExtend(args Args) (Value, error) {
+	lst, err := args.ArgDefault(0, EmptyListValue).List()
+	if err != nil {
+		return nil, err
+	}
+	lst2, err := args.ArgDefault(1, EmptyListValue).List()
+	if err != nil {
+		return nil, err
+	}
+
+	clone := make(ListValue, 0, len(lst)+len(lst2))
+	clone = append(clone, lst...)
+	clone = append(clone, lst2...)
+
+	return clone, nil
+}
+
 func AddBuiltins(c *Context) {
 	c.Declare("map", FuncValue(BuiltinMap))
 	c.Declare("filter", FuncValue(BuiltinFilter))
@@ -207,4 +237,6 @@ func AddBuiltins(c *Context) {
 	c.Declare("bool", FuncValue(BuiltinBool))
 	c.Declare("number", FuncValue(BuiltinNumber))
 	c.Declare("range", FuncValue(BuiltinRange))
+	c.Declare("append", FuncValue(BuiltinAppend))
+	c.Declare("extend", FuncValue(BuiltinExtend))
 }

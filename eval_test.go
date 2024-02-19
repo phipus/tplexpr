@@ -58,6 +58,8 @@ func TestEval(t *testing.T) {
 		{`${range(2, 0, -1)}`, `2 1`, nil},
 		{`${declare(x, object(a => 1, b => 2))}${x.b}${x.a}`, "21", nil},
 		{`${declare(x, object(a => 1)) declare(y, object(x, b => 2))}${y.a y.b}`, "12", nil},
+		{`${declare(x, list(1)) declare(y, x.append(2, 3)) y}`, "1 2 3", nil},
+		{`${declare(x, list(1)) declare(y, list(2, 3)) x.extend(y)}`, "1 2 3", nil},
 	}
 
 	for i := range testCases {
