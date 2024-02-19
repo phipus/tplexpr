@@ -1,6 +1,11 @@
 package tplexpr
 
-import "testing"
+import (
+	"io/fs"
+	"os"
+	"strings"
+	"testing"
+)
 
 func TestEval(t *testing.T) {
 	type testCase struct {
@@ -159,5 +164,45 @@ func (t *evalTestImpl) Eval(tt *testing.T, templateName string, expectedResult s
 
 	if result != expectedResult {
 		tt.Errorf("expected '%s', got '%s'", expectedResult, result)
+	}
+}
+
+func TestEvalFile(t *testing.T) {
+	fsys := os.DirFS("testdata")
+	glob := "*.test.txt"
+	matches, err := fs.Glob(fsys, glob)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	store, err := BuildStore().
+		AddFS(fsys, glob).
+		Build()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	for _, fileName := range matches {
+		t.Logf("Test with file %s", fileName)
+		result, err := fs.ReadFile(fsys, strings.TrimSuffix(fileName, ".test.txt")+".result.txt")
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		sb := strings.Builder{}
+		err = store.Render(&sb, fileName, nil)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+
+		str := sb.String()
+		if str != string(result) {
+			t.Error("expected:")
+			t.Error(result)
+			t.Error("found:")
+			t.Error(str)
+		}
 	}
 }

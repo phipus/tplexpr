@@ -62,10 +62,6 @@ func (p *Parser) parseAtom() (n Node, err error) {
 	t := p.getToken()
 
 	switch t.Type {
-	case TokenValue:
-		p.consume()
-		n = &ValueNode{string(t.Value)}
-		return
 	case TokenIdent:
 		p.consume()
 		n = &VarNode{string(t.Value)}
@@ -791,6 +787,9 @@ func (p *Parser) parseDiscard() (n Node, err error) {
 func (p *Parser) ParseStmt() (n Node, err error) {
 	t := p.getToken()
 	switch t.Type {
+	case TokenValue:
+		p.consume()
+		n = &ValueNode{string(t.Value)}
 	case TokenBlock:
 		n, err = p.parseTemplate()
 	case TokenIf:
