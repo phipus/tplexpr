@@ -96,6 +96,11 @@ func parse(to *[]tplexpr.Node, s *Scanner) (err error) {
 				if err != nil {
 					return err
 				}
+			case "tx-wrap":
+				err = parseWrap(to, s)
+				if err != nil {
+					return err
+				}
 			default:
 				if len(t.Attr) <= 0 {
 					*to = append(*to, &tplexpr.ValueNode{Value: fmt.Sprintf("<%s>", t.Data)})
@@ -112,7 +117,7 @@ func parse(to *[]tplexpr.Node, s *Scanner) (err error) {
 		case html.EndTagToken:
 			switch t.Data {
 			case "tx-switch", "tx-case", "tx-default",
-				"tx-block", "tx-for", "tx-declare", "tx-discard", "tx-slot":
+				"tx-block", "tx-for", "tx-declare", "tx-discard", "tx-slot", "tx-wrap":
 				return nil
 			default:
 				*to = append(*to, &tplexpr.ValueNode{Value: fmt.Sprintf("</%s>", t.Data)})
@@ -148,6 +153,11 @@ func parse(to *[]tplexpr.Node, s *Scanner) (err error) {
 				}
 			case "tx-slot":
 				err = parseSlot(to, s)
+				if err != nil {
+					return err
+				}
+			case "tx-wrap":
+				err = parseWrap(to, s)
 				if err != nil {
 					return err
 				}
@@ -578,6 +588,51 @@ func parseSlot(to *[]tplexpr.Node, s *Scanner) error {
 				},
 			},
 		},
+	})
+	return nil
+}
+
+func parseWrap(to *[]tplexpr.Node, s *Scanner) error {
+	t := s.Token()
+	if !isOpenTag(&t, "tx-wrap") {
+		return errUnexpected(s, &t, "<tx-wrap ...")
+	}
+	attrs, err := getAttrsUnique(&t)
+	if err != nil {
+		return err
+	}
+	varName := attrs["var"]
+	if !identRegex.MatchString(varName) {
+		return fmt.Errorf("%w: invalid variable name '%s'", tplexpr.ErrSyntax, varName)
+	}
+	expr, err := parseString(attrs["expr"])
+	if err != nil {
+		return err
+	}
+
+	var body []tplexpr.Node
+	if t.Type == html.SelfClosingTagToken {
+		s.Consume()
+	} else {
+		s.Consume()
+		err = parse(&body, s)
+		if err != nil {
+			return err
+		}
+		t = s.Token()
+		if !isEndTag(&t, "tx-wrap") {
+			return errUnexpected(s, &t, "</tx-wrap>")
+		}
+	}
+
+	*to = append(*to, &tplexpr.DynCallNode{
+		Value: &tplexpr.SubprogNode{
+			Args: []string{varName},
+			Prog: expr,
+		},
+		Args: []tplexpr.Node{&tplexpr.SubprogNode{
+			Prog: &tplexpr.EmitNode{Nodes: body},
+		}},
 	})
 	return nil
 }
