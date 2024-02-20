@@ -1,0 +1,12 @@
+${
+    declare(a, false)
+    declare(x, "x")
+    declare(y, "y")
+%}
+
+${a.then(x, y)} == ${if a then x else y endif}
+${a.then(x)} == ${if a then x endif}
+
+${declare(a, true) %}
+${a.then(x, y)} == ${if a then x else y endif}
+${a.then(x)} == ${if a then x endif}

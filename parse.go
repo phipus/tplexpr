@@ -229,7 +229,7 @@ func (p *Parser) parseAtom() (n Node, err error) {
 			n = &SubprogNode{args, n}
 		} else {
 			p.consume()
-			n, err = p.Parse()
+			n, err = p.ParseExpr()
 			if err != nil {
 				return
 			}
@@ -291,6 +291,31 @@ func (p *Parser) parsePostfix() (n Node, err error) {
 				} else {
 					n = &AttrNode{n, name}
 				}
+			case TokenThen:
+				p.consume()
+				var args []Node
+				args, err = p.parseArgList()
+				if err != nil {
+					return
+				}
+
+				switch len(args) {
+				case 0:
+					n = &ValueNode{""}
+				case 1:
+					n = &OrNode{[]Node{
+						&AndNode{[]Node{n, args[0]}},
+						&ValueNode{""},
+					}}
+				case 2:
+					n = &OrNode{[]Node{
+						&AndNode{[]Node{n, args[0]}},
+						args[1],
+					}}
+				default:
+					err = fmt.Errorf("%w: .then reiquires 0 to 2 arguments", ErrSyntax)
+				}
+				return
 			default:
 				err = p.errUnexpected("")
 				return
