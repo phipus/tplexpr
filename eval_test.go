@@ -26,7 +26,7 @@ func TestEval(t *testing.T) {
 		{
 			input:  `<ul>${items.map((x) => "<li>${x.value}</li>").join()}</ul>`,
 			result: "<ul><li>Hello</li><li>World</li></ul>",
-			vars: map[string]Value{
+			vars: Vars{
 				"items": L{
 					O{"value": S("Hello")},
 					O{"value": S("World")},
@@ -183,6 +183,44 @@ func TestEvalFile(t *testing.T) {
 		return
 	}
 
+	type subReflect struct {
+		S string
+		B bool
+		I int
+	}
+
+	type reflect struct {
+		Numbers []int
+		Floats  []float64
+		S       string
+		X       interface{}
+		Opt     *reflect
+		Sub     subReflect
+	}
+
+	r, err := Reflect(reflect{
+		Numbers: []int{1, 2, 3, 4},
+		Floats:  []float64{0.25, 0.5, 0.75, 1},
+		S:       "Hello",
+		X:       &subReflect{S: "World", B: false, I: 42},
+		Opt:     nil,
+		Sub: subReflect{
+			S: "Sub reflect Value",
+			B: true,
+			I: 48,
+		},
+	})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	vars := BuildVars().
+		Set("lst", L{N(1), N(2), S("one"), S("two")}).
+		SetString("s", "Hello World").
+		SetString("q", "Q").
+		Set("r", r)
+
 	for _, fileName := range matches {
 		t.Logf("Test with file %s", fileName)
 		result, err := fs.ReadFile(fsys, strings.TrimSuffix(fileName, ".test.txt")+".result.txt")
@@ -191,7 +229,7 @@ func TestEvalFile(t *testing.T) {
 			return
 		}
 		sb := strings.Builder{}
-		err = store.Render(&sb, fileName, nil)
+		err = store.Render(&sb, fileName, vars)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -200,7 +238,7 @@ func TestEvalFile(t *testing.T) {
 		str := sb.String()
 		if str != string(result) {
 			t.Error("expected:")
-			t.Error(result)
+			t.Error(string(result))
 			t.Error("found:")
 			t.Error(str)
 		}
