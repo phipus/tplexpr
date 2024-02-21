@@ -78,3 +78,10 @@ func (l ListValue) AddBool(value bool) ListValue {
 func (l ListValue) AddNumber(value float64) ListValue {
 	return l.Add(NumberValue(value))
 }
+
+func (l ListValue) AddStrings(value []string) ListValue {
+	for _, v := range value {
+		l = append(l, StringValue(v))
+	}
+	return l
+}
