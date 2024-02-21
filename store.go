@@ -93,6 +93,9 @@ func (s *watchStore) parse() error {
 	if s.addBuiltins {
 		AddBuiltins(&s.c)
 	}
+	for _, p := range s.plugins {
+		p.InitContext(&s.c)
+	}
 	return nil
 }
 

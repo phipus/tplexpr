@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/phipus/tplexpr"
@@ -130,40 +131,45 @@ func TestCompile(t *testing.T) {
 }
 
 func TestCompileFiles(t *testing.T) {
-	fsys, err := fs.Sub(os.DirFS("testdata"), "templates")
+	fsys := os.DirFS("testdata")
+	store, err := tplexpr.BuildStore().
+		AddPlugin(&Plugin{}).
+		AddFS(fsys, "*.test.html", "*.template.html").
+		Build()
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	ctx := tplexpr.NewCompileContext()
-	err = CompileGlobFS(fsys, "*.html", &ctx)
+	matches, err := fs.Glob(fsys, "*.test.html")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	_, c := ctx.Compile()
-	tplexpr.AddBuiltins(&c)
 
-	templates := []string{
-		"test1.html",
-	}
+	for _, fileName := range matches {
+		t.Logf("eval template %s", fileName)
 
-	for _, tpl := range templates {
-		t.Logf("eval template %s", tpl)
-		str, err := c.EvalTemplateString(tpl, nil)
+		sb := strings.Builder{}
+		err = store.Render(&sb, fileName, nil)
 		if err != nil {
 			t.Error(err)
 			continue
 		}
+		str := sb.String()
 
-		os.WriteFile(path.Join("testdata/tmp", tpl), []byte(str), 0644)
+		os.WriteFile(path.Join("testdata/tmp", fileName), []byte(str), 0644)
 
-		expected, err := os.ReadFile(path.Join("testdata/results", tpl))
+		resultFileName := strings.Replace(fileName, ".test.html", ".result.html", 1)
+
+		expectedBytes, err := os.ReadFile(path.Join("testdata", resultFileName))
 		if err != nil {
 			t.Error(err)
 			continue
 		}
+		// convert to linux line endings
+		expected := strings.ReplaceAll(string(expectedBytes), "\r\n", "\n")
+
 		if str != string(expected) {
 			t.Error("expected:")
 			t.Error(string(expected))

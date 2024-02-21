@@ -16,6 +16,7 @@ type storeFS struct {
 
 type Plugin interface {
 	ParseTemplate(name string, data []byte, ctx *CompileContext) (compiled bool, err error)
+	InitContext(ctx *Context)
 }
 
 func BuildStore() *StoreBuilder {
@@ -89,6 +90,9 @@ func (s *StoreBuilder) Build() (Store, error) {
 	_, c := cc.Compile()
 	if !s.noBuiltins {
 		AddBuiltins(&c)
+	}
+	for _, p := range s.plugins {
+		p.InitContext(&c)
 	}
 	return &simpleStore{c}, nil
 }

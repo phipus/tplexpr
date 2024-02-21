@@ -71,16 +71,26 @@ func CompileFile(fileName string, ctx *tplexpr.CompileContext) error {
 	return CompileTemplate(fileName, file, ctx)
 }
 
-type Plugin struct{}
+type Plugin struct {
+	NoBuiltins bool
+}
 
-var _ tplexpr.Plugin = Plugin{}
+var _ tplexpr.Plugin = &Plugin{}
 
-func (Plugin) ParseTemplate(name string, data []byte, ctx *tplexpr.CompileContext) (bool, error) {
+func (p *Plugin) ParseTemplate(name string, data []byte, ctx *tplexpr.CompileContext) (bool, error) {
 	switch tplexpr.FileNameExtension(name) {
 	case ".html", ".htm":
 		err := ParseTemplateReader(ctx, name, bytes.NewReader(data))
 		return true, err
 	default:
 		return false, nil
+	}
+}
+
+func (p *Plugin) InitContext(ctx *tplexpr.Context) {
+	if !p.NoBuiltins {
+		ctx.Declare("buildQueryParams", tplexpr.FuncValue(BuiltinBuildQueryParams))
+		ctx.Declare("escapeQuery", tplexpr.FuncValue(BuiltinQueryEscape))
+		ctx.Declare("escapePath", tplexpr.FuncValue(BuiltinPathEscape))
 	}
 }
