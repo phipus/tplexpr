@@ -7,15 +7,15 @@ import (
 )
 
 type WebStore struct {
-	s tplexpr.Store
-	c ContentTypeResolver
+	Store    tplexpr.Store
+	Resolver ContentTypeResolver
 }
 
 func (s *WebStore) Render(w http.ResponseWriter, status int, name string, vars tplexpr.VarScope) error {
 	contentType := ""
 	ok := false
-	if s.c != nil {
-		contentType, ok = s.c.ResolveContentType(name)
+	if s.Resolver != nil {
+		contentType, ok = s.Resolver.ResolveContentType(name)
 	} else {
 		contentType, ok = ResolveWebContentType(name)
 	}
@@ -23,7 +23,7 @@ func (s *WebStore) Render(w http.ResponseWriter, status int, name string, vars t
 		w.Header().Set("Content-Type", contentType)
 	}
 	w.WriteHeader(status)
-	return s.s.Render(w, name, vars)
+	return s.Store.Render(w, name, vars)
 }
 
 type ContentTypeResolver interface {
