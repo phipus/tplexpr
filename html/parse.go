@@ -623,6 +623,7 @@ func parseWrap(to *[]tplexpr.Node, s *Scanner) error {
 		if !isEndTag(&t, "tx-wrap") {
 			return errUnexpected(s, &t, "</tx-wrap>")
 		}
+		s.Consume()
 	}
 
 	*to = append(*to, &tplexpr.DynCallNode{
