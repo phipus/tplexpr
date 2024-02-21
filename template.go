@@ -2,7 +2,6 @@ package tplexpr
 
 import (
 	"io"
-	"net/http"
 	"strings"
 )
 
@@ -11,31 +10,7 @@ type Template struct {
 }
 
 type Store interface {
-	Render(w io.Writer, name string, vars Vars) error
-}
-
-type WebStore struct {
-	Store        Store
-	ContentTypes ContentTypeResolver
-}
-
-type ContentTypeResolver interface {
-	ResolveContentType(name string) (string, bool)
-}
-
-func (s *WebStore) Render(w http.ResponseWriter, status int, name string, vars Vars) error {
-	contentType := ""
-	ok := false
-	if s.ContentTypes != nil {
-		contentType, ok = s.ContentTypes.ResolveContentType(name)
-	} else {
-		contentType, ok = ResolveWebContentType(name)
-	}
-	if ok {
-		w.Header().Set("Content-Type", contentType)
-	}
-	w.WriteHeader(status)
-	return s.Store.Render(w, name, vars)
+	Render(w io.Writer, name string, vars VarScope) error
 }
 
 func FileNameExtension(name string) string {
@@ -49,32 +24,10 @@ func FileNameExtension(name string) string {
 	return ext
 }
 
-func ResolveWebContentType(name string) (string, bool) {
-	ext := FileNameExtension(name)
-
-	contentType := ""
-	switch ext {
-	case ".htm", ".html":
-		contentType = "text/html"
-	case ".css":
-		contentType = "text/css"
-	case ".js":
-		contentType = "text/javascript"
-	case ".json":
-		contentType = "application/json"
-	case ".txt":
-		contentType = "text/plain"
-	default:
-		return "", false
+func Render(s Store, w io.Writer, tpl string, vb *ScopeBuilder) error {
+	vars, err := vb.Build()
+	if err != nil {
+		return err
 	}
-
-	return contentType, true
-}
-
-type webContentTypeResolver struct{}
-
-var WebContentTypeResolver ContentTypeResolver = webContentTypeResolver{}
-
-func (webContentTypeResolver) ResolveContentType(name string) (string, bool) {
-	return ResolveWebContentType(name)
+	return s.Render(w, tpl, vars)
 }

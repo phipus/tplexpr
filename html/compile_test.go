@@ -15,7 +15,7 @@ func TestCompile(t *testing.T) {
 		name     string
 		doc      string
 		expected string
-		vars     tplexpr.Vars
+		vars     tplexpr.VarScope
 	}
 
 	testCases := []testCase{
@@ -74,7 +74,7 @@ func TestCompile(t *testing.T) {
 					</body>
 				</html>
 			`,
-			vars: tplexpr.Vars{"name": tplexpr.S("World")},
+			vars: tplexpr.VarScope{"name": tplexpr.S("World")},
 		},
 		{
 			name: "Iterate (tx-for)",
