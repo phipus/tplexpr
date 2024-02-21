@@ -1012,7 +1012,11 @@ func evalAttr(c *Context, stack *valueStack, instr Instr) (value Value, err erro
 	}
 	value, ok := obj.Key(instr.sarg)
 	if !ok {
-		value, err = c.NameError(instr.sarg)
+		if c.NameError != nil {
+			value, err = c.NameError(instr.sarg)
+		} else {
+			value = EmptyStringValue
+		}
 	}
 	return
 }
