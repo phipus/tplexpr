@@ -12,7 +12,7 @@ type simpleStore struct {
 
 var _ Store = &simpleStore{}
 
-func (s *simpleStore) Render(w io.Writer, name string, vars VarScope) error {
+func (s *simpleStore) Render(w io.Writer, name string, vars Vars) error {
 	return s.c.EvalTemplateWriter(name, vars, w)
 }
 
@@ -99,7 +99,7 @@ func (s *watchStore) parse() error {
 	return nil
 }
 
-func (s *watchStore) Render(w io.Writer, name string, vars VarScope) error {
+func (s *watchStore) Render(w io.Writer, name string, vars Vars) error {
 	if !s.parsed || s.isExpired() {
 		s.parsed = false
 		err := s.parse()

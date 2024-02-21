@@ -492,7 +492,7 @@ func EvalString(c *Context, code []Instr) (string, error) {
 	return b.String(), err
 }
 
-func (c *Context) EvalTemplateRaw(name string, vars VarScope, wr ValueWriter) error {
+func (c *Context) EvalTemplateRaw(name string, vars Vars, wr ValueWriter) error {
 	c.BeginScope()
 	defer c.EndScope()
 
@@ -503,7 +503,7 @@ func (c *Context) EvalTemplateRaw(name string, vars VarScope, wr ValueWriter) er
 	return evalTemplate(c, name, wr)
 }
 
-func (c *Context) EvalTemplateString(name string, vars VarScope) (string, error) {
+func (c *Context) EvalTemplateString(name string, vars Vars) (string, error) {
 	b := stringBuilder{c: c}
 	err := c.EvalTemplateRaw(name, vars, &b)
 	return b.String(), err
@@ -540,7 +540,7 @@ func EvalWriter(c *Context, code []Instr, wr io.Writer) error {
 	return err
 }
 
-func (c *Context) EvalTemplateWriter(name string, vars VarScope, wr io.Writer) error {
+func (c *Context) EvalTemplateWriter(name string, vars Vars, wr io.Writer) error {
 	w := outputWriter{c: c, w: wr}
 	err := c.EvalTemplateRaw(name, vars, &w)
 	return err

@@ -26,7 +26,7 @@ func TestEval(t *testing.T) {
 		{
 			input:  `<ul>${items.map((x) => "<li>${x.value}</li>").join()}</ul>`,
 			result: "<ul><li>Hello</li><li>World</li></ul>",
-			vars: VarScope{
+			vars: Vars{
 				"items": L{
 					O{"value": S("Hello")},
 					O{"value": S("World")},
@@ -123,7 +123,7 @@ func TestEvalTemplate(t *testing.T) {
 type evalTestImpl struct {
 	name      string
 	templates map[string]string
-	vars      VarScope
+	vars      Vars
 }
 
 func evalTest(name string) *evalTestImpl {
@@ -215,7 +215,7 @@ func TestEvalFile(t *testing.T) {
 		return
 	}
 
-	vars := BuildScope().
+	vars := BuildVars().
 		Set("lst", L{N(1), N(2), S("one"), S("two")}).
 		SetString("s", "Hello World").
 		SetString("q", "Q").

@@ -9,35 +9,35 @@ type (
 	F = FuncValue
 )
 
-type ScopeBuilder struct {
-	vars VarScope
+type VarsBuilder struct {
+	vars Vars
 	err  error
 }
 
-type VarScope map[string]Value
+type Vars map[string]Value
 
-func BuildScope() *ScopeBuilder {
-	return &ScopeBuilder{vars: VarScope{}}
+func BuildVars() *VarsBuilder {
+	return &VarsBuilder{vars: Vars{}}
 }
 
-func (b *ScopeBuilder) Set(name string, value Value) *ScopeBuilder {
+func (b *VarsBuilder) Set(name string, value Value) *VarsBuilder {
 	b.vars[name] = value
 	return b
 }
 
-func (b *ScopeBuilder) SetString(name, value string) *ScopeBuilder {
+func (b *VarsBuilder) SetString(name, value string) *VarsBuilder {
 	return b.Set(name, StringValue(value))
 }
 
-func (b *ScopeBuilder) SetBool(name string, value bool) *ScopeBuilder {
+func (b *VarsBuilder) SetBool(name string, value bool) *VarsBuilder {
 	return b.Set(name, BoolValue(value))
 }
 
-func (b *ScopeBuilder) SetNumber(name string, value float64) *ScopeBuilder {
+func (b *VarsBuilder) SetNumber(name string, value float64) *VarsBuilder {
 	return b.Set(name, NumberValue(value))
 }
 
-func (b *ScopeBuilder) SetList(name string, value *ListBuilder) *ScopeBuilder {
+func (b *VarsBuilder) SetList(name string, value *ListBuilder) *VarsBuilder {
 	if b.err != nil {
 		return b
 	}
@@ -46,7 +46,7 @@ func (b *ScopeBuilder) SetList(name string, value *ListBuilder) *ScopeBuilder {
 	return b.Set(name, v)
 }
 
-func (b *ScopeBuilder) SetObject(name string, value *ObjectBuilder) *ScopeBuilder {
+func (b *VarsBuilder) SetObject(name string, value *ObjectBuilder) *VarsBuilder {
 	if b.err != nil {
 		return b
 	}
@@ -55,7 +55,7 @@ func (b *ScopeBuilder) SetObject(name string, value *ObjectBuilder) *ScopeBuilde
 	return b.Set(name, v)
 }
 
-func (b *ScopeBuilder) SetReflect(name string, value interface{}) *ScopeBuilder {
+func (b *VarsBuilder) SetReflect(name string, value interface{}) *VarsBuilder {
 	if b.err != nil {
 		return b
 	}
@@ -64,14 +64,14 @@ func (b *ScopeBuilder) SetReflect(name string, value interface{}) *ScopeBuilder 
 	return b.Set(name, v)
 }
 
-func (b *ScopeBuilder) SetMap(m map[string]Value) *ScopeBuilder {
+func (b *VarsBuilder) SetMap(m map[string]Value) *VarsBuilder {
 	for name, value := range m {
 		b.vars[name] = value
 	}
 	return b
 }
 
-func (b *ScopeBuilder) Build() (VarScope, error) {
+func (b *VarsBuilder) Build() (Vars, error) {
 	return b.vars, b.err
 }
 

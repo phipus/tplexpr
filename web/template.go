@@ -16,7 +16,7 @@ func NewStore(s tplexpr.Store, r ContentTypeResolver) *Store {
 	return &Store{s, r}
 }
 
-func (s *Store) RenderVars(w http.ResponseWriter, status int, name string, vars tplexpr.VarScope) error {
+func (s *Store) RenderVars(w http.ResponseWriter, status int, name string, vars tplexpr.Vars) error {
 	contentType := ""
 	ok := false
 	if s.r != nil {
@@ -31,7 +31,7 @@ func (s *Store) RenderVars(w http.ResponseWriter, status int, name string, vars 
 	return s.s.Render(w, name, vars)
 }
 
-func (s *Store) Render(w http.ResponseWriter, status int, name string, vb *tplexpr.ScopeBuilder) error {
+func (s *Store) Render(w http.ResponseWriter, status int, name string, vb *tplexpr.VarsBuilder) error {
 	vars, err := vb.Build()
 	if err != nil {
 		return err
