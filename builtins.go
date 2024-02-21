@@ -22,16 +22,11 @@ func (c *Args) ArgDefault(i int, def Value) (v Value) {
 	return
 }
 
-var (
-	EmptyStringValue Value = StringValue("")
-	EmptyListValue   Value = ListValue{}
-)
-
 func (c *Args) Arg(i int) (v Value) {
 	if i >= 0 && i < len(c.args) {
 		return c.args[i]
 	}
-	return EmptyStringValue
+	return Nil
 }
 
 func (c *Args) Args() []Value {
@@ -43,7 +38,7 @@ func mapNOP(args Args) (Value, error) {
 }
 
 func BuiltinMap(args Args) (Value, error) {
-	values, err := args.ArgDefault(0, EmptyListValue).List()
+	values, err := args.Arg(0).List()
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +58,7 @@ func filterNOP(args Args) (Value, error) {
 }
 
 func BuiltinFilter(args Args) (Value, error) {
-	values, err := args.ArgDefault(0, EmptyListValue).List()
+	values, err := args.Arg(0).List()
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +79,7 @@ func BuiltinFilter(args Args) (Value, error) {
 }
 
 func BuiltinReverse(args Args) (Value, error) {
-	values, err := args.ArgDefault(0, EmptyListValue).List()
+	values, err := args.Arg(0).List()
 	if err != nil {
 		return nil, err
 	}
@@ -98,11 +93,11 @@ func BuiltinReverse(args Args) (Value, error) {
 }
 
 func BuiltinJoin(args Args) (Value, error) {
-	value, err := args.ArgDefault(0, EmptyListValue).List()
+	value, err := args.Arg(0).List()
 	if err != nil {
 		return nil, err
 	}
-	sep, err := args.ArgDefault(1, StringValue("")).String()
+	sep, err := args.Arg(1).String()
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +194,7 @@ func BuiltinRange(args Args) (Value, error) {
 }
 
 func BuiltinAppend(args Args) (Value, error) {
-	lst, err := args.ArgDefault(0, EmptyListValue).List()
+	lst, err := args.Arg(0).List()
 	if err != nil {
 		return nil, err
 	}
@@ -212,11 +207,11 @@ func BuiltinAppend(args Args) (Value, error) {
 }
 
 func BuiltinExtend(args Args) (Value, error) {
-	lst, err := args.ArgDefault(0, EmptyListValue).List()
+	lst, err := args.Arg(0).List()
 	if err != nil {
 		return nil, err
 	}
-	lst2, err := args.ArgDefault(1, EmptyListValue).List()
+	lst2, err := args.Arg(1).List()
 	if err != nil {
 		return nil, err
 	}
@@ -229,17 +224,17 @@ func BuiltinExtend(args Args) (Value, error) {
 }
 
 func BuiltinGet(args Args) (Value, error) {
-	obj, err := args.ArgDefault(0, ObjectValue{}).Object()
+	obj, err := args.Arg(0).Object()
 	if err != nil {
 		return nil, err
 	}
-	key, err := args.ArgDefault(1, EmptyStringValue).String()
+	key, err := args.Arg(1).String()
 	if err != nil {
 		return nil, err
 	}
 	value, ok := obj.Key(key)
 	if !ok {
-		value = args.ArgDefault(2, EmptyStringValue)
+		value = args.Arg(2)
 	}
 	return value, nil
 }
@@ -269,7 +264,7 @@ func (s *sortableList) Swap(i, j int) {
 }
 
 func BuiltinSorted(args Args) (Value, error) {
-	lst, err := args.ArgDefault(0, EmptyListValue).List()
+	lst, err := args.Arg(0).List()
 	if err != nil {
 		return nil, err
 	}
