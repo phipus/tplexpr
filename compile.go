@@ -203,6 +203,14 @@ func (c *CompileContext) PopOutputFilter() {
 	c.pushInstr(popOutputFilter, 0, "")
 }
 
+func (c *CompileContext) BeginScope() {
+	c.pushInstr(beginScope, 0, "")
+}
+
+func (c *CompileContext) EndScope() {
+	c.pushInstr(endScope, 0, "")
+}
+
 func (c *CompileContext) Compile() (code []Instr, ctx Context) {
 	code = c.code
 	ctx = NewContext()

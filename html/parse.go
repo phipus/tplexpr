@@ -626,14 +626,10 @@ func parseWrap(to *[]tplexpr.Node, s *Scanner) error {
 		s.Consume()
 	}
 
-	*to = append(*to, &tplexpr.DynCallNode{
-		Value: &tplexpr.SubprogNode{
-			Args: []string{varName},
-			Prog: expr,
-		},
-		Args: []tplexpr.Node{&tplexpr.SubprogNode{
-			Prog: &tplexpr.EmitNode{Nodes: body},
-		}},
+	*to = append(*to, &WrapNode{
+		Var:     varName,
+		Expr:    expr,
+		Wrapped: body,
 	})
 	return nil
 }

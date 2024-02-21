@@ -69,3 +69,31 @@ func (n *SwitchNode) Compile(ctx *tplexpr.CompileContext, mode int) error {
 	ctx.DiscardPop()
 	return nil
 }
+
+type WrapNode struct {
+	Var     string
+	Expr    tplexpr.Node
+	Wrapped []tplexpr.Node
+}
+
+func (n *WrapNode) Compile(ctx *tplexpr.CompileContext, mode int) error {
+	ctx.BeginScope()
+	decl := tplexpr.DeclareNode{
+		Name: n.Var,
+		Value: &tplexpr.SubprogNode{
+			Prog: &tplexpr.EmitNode{Nodes: n.Wrapped},
+		},
+	}
+	err := decl.Compile(ctx, mode)
+	if err != nil {
+		return err
+	}
+
+	err = n.Expr.Compile(ctx, mode)
+	if err != nil {
+		return err
+	}
+
+	ctx.EndScope()
+	return nil
+}
