@@ -14,7 +14,7 @@ func ParseReader(r io.Reader) (tplexpr.Node, error) {
 	s := NewScanner(r)
 
 	body := []tplexpr.Node{}
-	err := parse(&body, &s)
+	err := parse(&body, &s, "")
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func ParseTemplateString(ctx *tplexpr.CompileContext, name string, tpl string) e
 	return ctx.CompileTemplate(name, n)
 }
 
-func parse(to *[]tplexpr.Node, s *Scanner) (err error) {
+func parse(to *[]tplexpr.Node, s *Scanner, parentTag string) (err error) {
 	for {
 		t := s.Token()
 		switch t.Type {
@@ -51,18 +51,24 @@ func parse(to *[]tplexpr.Node, s *Scanner) (err error) {
 			err = s.Err()
 			return
 		case html.TextToken:
-			n, err := parseString(t.Data)
-			if err != nil {
-				return err
-			}
-			if value, ok := n.(*tplexpr.ValueNode); ok {
-				value.Value = html.EscapeString(value.Value)
-				*to = append(*to, value)
-			} else {
-				*to = append(*to, &TextNode{n})
-			}
+			switch parentTag {
+			case "style", "script":
+				// jus ignore script / style tags
+				*to = append(*to, &tplexpr.ValueNode{Value: t.Data})
+			default:
+				n, err := parseString(t.Data)
+				if err != nil {
+					return err
+				}
+				if value, ok := n.(*tplexpr.ValueNode); ok {
+					value.Value = html.EscapeString(value.Value)
+					*to = append(*to, value)
+				} else {
+					*to = append(*to, &TextNode{n})
+				}
 
-			s.Consume()
+				s.Consume()
+			}
 
 		case html.StartTagToken:
 			switch t.Data {
@@ -338,7 +344,7 @@ func parseSwitch(to *[]tplexpr.Node, s *Scanner) error {
 
 			s.Consume()
 			body := []tplexpr.Node{}
-			err = parse(&body, s)
+			err = parse(&body, s, t.Data)
 			if err != nil {
 				return err
 			}
@@ -359,7 +365,7 @@ func parseSwitch(to *[]tplexpr.Node, s *Scanner) error {
 				continue
 			}
 			s.Consume()
-			err = parse(&alt, s)
+			err = parse(&alt, s, t.Data)
 			if err != nil {
 				return err
 			}
@@ -422,7 +428,7 @@ func parseBlock(to *[]tplexpr.Node, s *Scanner) error {
 	}
 	s.Consume()
 	body := []tplexpr.Node{}
-	err = parse(&body, s)
+	err = parse(&body, s, t.Data)
 	if err != nil {
 		return err
 	}
@@ -468,7 +474,7 @@ func parseFor(to *[]tplexpr.Node, s *Scanner) error {
 	}
 	s.Consume()
 	body := []tplexpr.Node{}
-	err = parse(&body, s)
+	err = parse(&body, s, t.Data)
 	if err != nil {
 		return err
 	}
@@ -502,7 +508,7 @@ func parseDeclare(to *[]tplexpr.Node, s *Scanner) error {
 	}
 	s.Consume()
 	n := &tplexpr.EmitNode{}
-	err = parse(&n.Nodes, s)
+	err = parse(&n.Nodes, s, t.Data)
 	if err != nil {
 		return err
 	}
@@ -527,7 +533,7 @@ func parseDiscard(to *[]tplexpr.Node, s *Scanner) error {
 	}
 	s.Consume()
 	body := []tplexpr.Node{}
-	err := parse(&body, s)
+	err := parse(&body, s, t.Data)
 	if err != nil {
 		return err
 	}
@@ -565,7 +571,7 @@ func parseSlot(to *[]tplexpr.Node, s *Scanner) error {
 	}
 	s.Consume()
 	alt := []tplexpr.Node{}
-	err = parse(&alt, s)
+	err = parse(&alt, s, t.Data)
 	if err != nil {
 		return err
 	}
@@ -615,7 +621,7 @@ func parseWrap(to *[]tplexpr.Node, s *Scanner) error {
 		s.Consume()
 	} else {
 		s.Consume()
-		err = parse(&body, s)
+		err = parse(&body, s, t.Data)
 		if err != nil {
 			return err
 		}
