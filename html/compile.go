@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/phipus/tplexpr"
+	"github.com/phipus/tplexpr/web"
 )
 
 func Compile(r io.Reader, ctx *tplexpr.CompileContext, mode int) (err error) {
@@ -78,7 +79,7 @@ type Plugin struct {
 var _ tplexpr.Plugin = &Plugin{}
 
 func (p *Plugin) ParseTemplate(name string, data []byte, ctx *tplexpr.CompileContext) (bool, error) {
-	switch tplexpr.FileNameExtension(name) {
+	switch web.FileNameExtension(name) {
 	case ".html", ".htm":
 		err := ParseTemplateReader(ctx, name, bytes.NewReader(data))
 		return true, err
