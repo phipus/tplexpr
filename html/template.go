@@ -7,15 +7,19 @@ import (
 )
 
 type WebStore struct {
-	Store    tplexpr.Store
-	Resolver ContentTypeResolver
+	s tplexpr.Store
+	r ContentTypeResolver
+}
+
+func NewWebStore(s tplexpr.Store, r ContentTypeResolver) *WebStore {
+	return &WebStore{s, r}
 }
 
 func (s *WebStore) Render(w http.ResponseWriter, status int, name string, vars tplexpr.VarScope) error {
 	contentType := ""
 	ok := false
-	if s.Resolver != nil {
-		contentType, ok = s.Resolver.ResolveContentType(name)
+	if s.r != nil {
+		contentType, ok = s.r.ResolveContentType(name)
 	} else {
 		contentType, ok = ResolveWebContentType(name)
 	}
@@ -23,7 +27,7 @@ func (s *WebStore) Render(w http.ResponseWriter, status int, name string, vars t
 		w.Header().Set("Content-Type", contentType)
 	}
 	w.WriteHeader(status)
-	return s.Store.Render(w, name, vars)
+	return s.s.Render(w, name, vars)
 }
 
 type ContentTypeResolver interface {
@@ -58,4 +62,12 @@ func ResolveWebContentType(name string) (string, bool) {
 	}
 
 	return contentType, true
+}
+
+func Render(s *WebStore, w http.ResponseWriter, status int, tpl string, vb *tplexpr.ScopeBuilder) error {
+	vars, err := vb.Build()
+	if err != nil {
+		return err
+	}
+	return s.Render(w, status, tpl, vars)
 }
