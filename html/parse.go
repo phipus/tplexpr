@@ -203,7 +203,18 @@ func parse(to *[]tplexpr.Node, s *Scanner) (err error) {
 }
 
 func parseAttrs(to *[]tplexpr.Node, attrs []html.Attribute) error {
+	var styleNodes []tplexpr.Node
+
 	for _, a := range attrs {
+		if a.Namespace == "" && (a.Key == "tx-style" || a.Key == "style") {
+			n, err := parseString(a.Val)
+			if err != nil {
+				return err
+			}
+			styleNodes = append(styleNodes, n)
+			continue
+		}
+
 		key := ""
 		if a.Namespace != "" {
 			key = fmt.Sprintf(" %s:%s=\"", a.Namespace, a.Key)
@@ -221,8 +232,23 @@ func parseAttrs(to *[]tplexpr.Node, attrs []html.Attribute) error {
 			*to = append(*to, &TextNode{n})
 			*to = append(*to, &tplexpr.ValueNode{Value: "\""})
 		}
-
 	}
+
+	switch len(styleNodes) {
+	case 0:
+		// nop
+	case 1:
+		if value, ok := styleNodes[0].(*tplexpr.ValueNode); ok {
+			*to = append(*to, &tplexpr.ValueNode{Value: fmt.Sprintf(` style="%s"`, html.EscapeString(value.Value))})
+			break
+		}
+		fallthrough
+	default:
+		*to = append(*to, &tplexpr.ValueNode{Value: ` style="`})
+		*to = append(*to, &TextNode{&tplexpr.EmitNode{Nodes: styleNodes}})
+		*to = append(*to, &tplexpr.ValueNode{Value: "\""})
+	}
+
 	return nil
 }
 
