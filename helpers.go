@@ -11,7 +11,6 @@ type (
 
 type VarsBuilder struct {
 	vars Vars
-	err  error
 }
 
 type Vars map[string]Value
@@ -38,30 +37,15 @@ func (b *VarsBuilder) SetNumber(name string, value float64) *VarsBuilder {
 }
 
 func (b *VarsBuilder) SetList(name string, value *ListBuilder) *VarsBuilder {
-	if b.err != nil {
-		return b
-	}
-	var v ListValue
-	v, b.err = value.Build()
-	return b.Set(name, v)
+	return b.Set(name, value.Build())
 }
 
 func (b *VarsBuilder) SetObject(name string, value *ObjectBuilder) *VarsBuilder {
-	if b.err != nil {
-		return b
-	}
-	var v ObjectValue
-	v, b.err = value.Build()
-	return b.Set(name, v)
+	return b.Set(name, value.Build())
 }
 
 func (b *VarsBuilder) SetReflect(name string, value interface{}) *VarsBuilder {
-	if b.err != nil {
-		return b
-	}
-	var v Value
-	v, b.err = Reflect(value)
-	return b.Set(name, v)
+	return b.Set(name, Reflect(value))
 }
 
 func (b *VarsBuilder) SetMap(m map[string]Value) *VarsBuilder {
@@ -71,13 +55,12 @@ func (b *VarsBuilder) SetMap(m map[string]Value) *VarsBuilder {
 	return b
 }
 
-func (b *VarsBuilder) Build() (Vars, error) {
-	return b.vars, b.err
+func (b *VarsBuilder) Build() Vars {
+	return b.vars
 }
 
 type ObjectBuilder struct {
 	obj ObjectValue
-	err error
 }
 
 func BuildObject() *ObjectBuilder {
@@ -102,30 +85,15 @@ func (b *ObjectBuilder) SetNumber(name string, value float64) *ObjectBuilder {
 }
 
 func (b *ObjectBuilder) SetList(name string, value *ListBuilder) *ObjectBuilder {
-	if b.err != nil {
-		return b
-	}
-	var v ListValue
-	v, b.err = value.Build()
-	return b.Set(name, v)
+	return b.Set(name, value.Build())
 }
 
 func (b *ObjectBuilder) SetObject(name string, value *ObjectBuilder) *ObjectBuilder {
-	if b.err != nil {
-		return b
-	}
-	var v ObjectValue
-	v, b.err = value.Build()
-	return b.Set(name, v)
+	return b.Set(name, value.Build())
 }
 
 func (b *ObjectBuilder) SetReflect(name string, value interface{}) *ObjectBuilder {
-	if b.err != nil {
-		return b
-	}
-	var v Value
-	v, b.err = Reflect(value)
-	return b.Set(name, v)
+	return b.Set(name, Reflect(value))
 }
 
 func (b *ObjectBuilder) SetMap(m map[string]Value) *ObjectBuilder {
@@ -135,13 +103,12 @@ func (b *ObjectBuilder) SetMap(m map[string]Value) *ObjectBuilder {
 	return b
 }
 
-func (b *ObjectBuilder) Build() (ObjectValue, error) {
-	return b.obj, b.err
+func (b *ObjectBuilder) Build() ObjectValue {
+	return b.obj
 }
 
 type ListBuilder struct {
 	lst ListValue
-	err error
 }
 
 func BuildList(values ...Value) *ListBuilder {
@@ -166,30 +133,15 @@ func (b *ListBuilder) AddNumber(value float64) *ListBuilder {
 }
 
 func (b *ListBuilder) AddList(value *ListBuilder) *ListBuilder {
-	if b.err != nil {
-		return b
-	}
-	var v ListValue
-	v, b.err = value.Build()
-	return b.Add(v)
+	return b.Add(value.Build())
 }
 
 func (b *ListBuilder) AddObject(value *ObjectBuilder) *ListBuilder {
-	if b.err != nil {
-		return b
-	}
-	var v ObjectValue
-	v, b.err = value.Build()
-	return b.Add(v)
+	return b.Add(value.Build())
 }
 
 func (b *ListBuilder) AddReflect(value interface{}) *ListBuilder {
-	if b.err != nil {
-		return b
-	}
-	var v Value
-	v, b.err = Reflect(value)
-	return b.Add(v)
+	return b.Add(Reflect(value))
 }
 
 func (l ListValue) AddStrings(value []string) ListValue {
@@ -204,6 +156,6 @@ func (b *ListBuilder) Extend(lst []Value) *ListBuilder {
 	return b
 }
 
-func (b *ListBuilder) Build() (ListValue, error) {
-	return b.lst, b.err
+func (b *ListBuilder) Build() ListValue {
+	return b.lst
 }

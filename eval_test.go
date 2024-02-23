@@ -198,7 +198,7 @@ func TestEvalFile(t *testing.T) {
 		Sub     subReflect
 	}
 
-	r, err := Reflect(reflect{
+	r := Reflect(reflect{
 		Numbers: []int{1, 2, 3, 4},
 		Floats:  []float64{0.25, 0.5, 0.75, 1},
 		S:       "Hello",
@@ -210,10 +210,6 @@ func TestEvalFile(t *testing.T) {
 			I: 48,
 		},
 	})
-	if err != nil {
-		t.Error(err)
-		return
-	}
 
 	vars := BuildVars().
 		Set("lst", L{N(1), N(2), S("one"), S("two")}).
@@ -229,7 +225,7 @@ func TestEvalFile(t *testing.T) {
 			return
 		}
 		sb := strings.Builder{}
-		err = Render(store, &sb, fileName, vars)
+		err = store.Render(&sb, fileName, vars.Build())
 		if err != nil {
 			t.Error(err)
 			continue
