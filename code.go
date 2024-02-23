@@ -15,6 +15,8 @@ const (
 	pushCall
 	emitCallDyn
 	pushCallDyn
+	emitCallSubprogNA
+	pushCallSubprogNA
 	emitAttr
 	pushAttr
 	emitSubprog

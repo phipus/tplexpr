@@ -136,6 +136,15 @@ func (c *CompileContext) DynCall(mode int, argc int) {
 	}
 }
 
+func (c *CompileContext) CallSubprogNA(mode int, subprogIdx int) {
+	switch mode {
+	case CompileEmit:
+		c.pushInstr(emitCallSubprogNA, subprogIdx, "")
+	case CompilePush:
+		c.pushInstr(pushCallSubprogNA, subprogIdx, "")
+	}
+}
+
 func (c *CompileContext) Subprog(mode int, subprogIdx int) {
 	switch mode {
 	case CompileEmit:
@@ -260,11 +269,23 @@ func (n *DynCallNode) Compile(ctx *CompileContext, mode int) error {
 	return nil
 }
 
-func (n *EmitNode) Compile(ctx *CompileContext, mode int) error {
-	for _, node := range n.Nodes {
-		err := node.Compile(ctx, mode)
+func (n *CompoundNode) Compile(ctx *CompileContext, mode int) error {
+	switch mode {
+	case CompilePush:
+		subprog, err := ctx.WithSubprog(nil, func() error {
+			return n.Compile(ctx, CompileEmit)
+		})
 		if err != nil {
 			return err
+		}
+		ctx.CallSubprogNA(CompilePush, subprog)
+
+	default:
+		for _, node := range n.Nodes {
+			err := node.Compile(ctx, mode)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

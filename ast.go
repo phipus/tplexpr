@@ -22,7 +22,7 @@ type DynCallNode struct {
 	Args  []Node
 }
 
-type EmitNode struct {
+type CompoundNode struct {
 	Nodes []Node
 }
 
@@ -107,4 +107,8 @@ type ObjectKey struct {
 type ObjectNode struct {
 	Extend Node
 	Keys   []ObjectKey
+}
+
+type SingleValueNode struct {
+	Node Node
 }

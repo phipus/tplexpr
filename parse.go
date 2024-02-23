@@ -887,7 +887,7 @@ func (p *Parser) Parse() (n Node, err error) {
 	case 1:
 		n = nodes[0]
 	default:
-		n = &EmitNode{nodes}
+		n = &CompoundNode{nodes}
 	}
 	return
 }

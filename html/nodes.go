@@ -81,7 +81,7 @@ func (n *WrapNode) Compile(ctx *tplexpr.CompileContext, mode int) error {
 	decl := tplexpr.DeclareNode{
 		Name: n.Var,
 		Value: &tplexpr.SubprogNode{
-			Prog: &tplexpr.EmitNode{Nodes: n.Wrapped},
+			Prog: &tplexpr.CompoundNode{Nodes: n.Wrapped},
 		},
 	}
 	err := decl.Compile(ctx, mode)

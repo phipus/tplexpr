@@ -18,7 +18,7 @@ func ParseReader(r io.Reader) (tplexpr.Node, error) {
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
-	return &tplexpr.EmitNode{Nodes: body}, nil
+	return &tplexpr.CompoundNode{Nodes: body}, nil
 }
 
 func ParseString(s string) (n tplexpr.Node, err error) {
@@ -245,7 +245,7 @@ func parseAttrs(to *[]tplexpr.Node, attrs []html.Attribute) error {
 		fallthrough
 	default:
 		*to = append(*to, &tplexpr.ValueNode{Value: ` style="`})
-		*to = append(*to, &TextNode{&tplexpr.EmitNode{Nodes: styleNodes}})
+		*to = append(*to, &TextNode{&tplexpr.CompoundNode{Nodes: styleNodes}})
 		*to = append(*to, &tplexpr.ValueNode{Value: "\""})
 	}
 
@@ -542,7 +542,7 @@ func parseDeclare(to *[]tplexpr.Node, s *Scanner) error {
 		return nil
 	}
 	s.Consume()
-	n := &tplexpr.EmitNode{}
+	n := &tplexpr.CompoundNode{}
 	err = parse(&n.Nodes, s)
 	if err != nil {
 		return err
@@ -625,7 +625,7 @@ func parseSlot(to *[]tplexpr.Node, s *Scanner) error {
 			},
 			&tplexpr.DynCallNode{
 				Value: &tplexpr.SubprogNode{
-					Prog: &tplexpr.EmitNode{Nodes: alt},
+					Prog: &tplexpr.CompoundNode{Nodes: alt},
 				},
 			},
 		},

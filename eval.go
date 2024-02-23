@@ -181,6 +181,18 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 				return err
 			}
 			stack.Push(retBuilder.Value())
+		case emitCallSubprogNA:
+			err = evalCallSubprogNA(c, &stack, instr, wr)
+			if err != nil {
+				return err
+			}
+		case pushCallSubprogNA:
+			retBuilder := returnValueBuilder{}
+			err = evalCallSubprogNA(c, &stack, instr, &retBuilder)
+			if err != nil {
+				return err
+			}
+			stack.Push(retBuilder.Value())
 		case emitAttr:
 			value, err = evalAttr(c, &stack, instr)
 			if err != nil {
@@ -333,8 +345,11 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 			}
 		case assignKey:
 			value := stack.Pop()
+
 			if obj, ok := stack.Peek().(ObjectValue); ok && obj != nil {
 				obj[instr.sarg] = value
+			} else if om, ok := stack.Peek().(objectMapper); ok {
+				om.o.SetKey(instr.sarg, value)
 			} else {
 				obj, err := stack.Pop().Object()
 				if err != nil {
@@ -403,6 +418,13 @@ func evalCall(c *Context, stack *valueStack, instr Instr, wr ValueWriter) (err e
 func evalCallDyn(c *Context, stack *valueStack, instr Instr, wr ValueWriter) (err error) {
 	allArgs := stack.PopN(instr.iarg + 1)
 	return allArgs[0].Call(Args{allArgs[1:]}, wr)
+}
+
+func evalCallSubprogNA(c *Context, stack *valueStack, instr Instr, wr ValueWriter) error {
+	c.BeginScope()
+	defer c.EndScope()
+
+	return EvalRaw(c, c.subprogs[instr.iarg].Code, wr)
 }
 
 func evalAttr(c *Context, stack *valueStack, instr Instr) (value Value, err error) {

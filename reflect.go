@@ -233,7 +233,7 @@ func (o *reflectObject) Key(name string) (Value, bool) {
 	case reflect.Array, reflect.Slice:
 		idx, err := strconv.ParseInt(name, 10, 64)
 		if err == nil && idx >= 0 && idx < int64(o.rv.Len()) {
-			return Reflect(o.rv.Index(int(idx))), true
+			return Reflect(o.rv.Index(int(idx)).Interface()), true
 		}
 	case reflect.Map:
 		typ := o.rv.Type()
