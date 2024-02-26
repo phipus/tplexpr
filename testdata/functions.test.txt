@@ -1,0 +1,17 @@
+${
+    declare(o, object(
+        hello => (name) => "Hello $name",
+        bye => (name) => "Bye $name",
+        blub => () => "blub",
+        minus => (value) => "- $value",
+    ))
+    declare(something, 'Something')
+%}
+
+${(o.hello)("World")}
+${(o.bye)("World")}
+${(o.blub)()}
+${(o.hello)((o.blub)())}
+${(o.hello)(include('true.template.txt'))}
+${(o.minus)(include('something.template.txt'))}
+${(o.hello)(for i in range(3) do i endfor)}

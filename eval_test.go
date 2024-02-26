@@ -176,7 +176,7 @@ func TestEvalFile(t *testing.T) {
 		return
 	}
 	store, err := BuildStore().
-		AddFS(fsys, glob).
+		AddFS(fsys, glob, "*.template.txt").
 		Build()
 	if err != nil {
 		t.Error(err)

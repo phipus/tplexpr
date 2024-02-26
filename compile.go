@@ -287,11 +287,17 @@ func (n *DynCallNode) Compile(ctx *CompileContext, mode int) error {
 	return nil
 }
 
-func (n *CompoundNode) Compile(ctx *CompileContext, mode int) error {
+func compileNodes(ctx *CompileContext, nodes []Node, mode int) error {
 	switch mode {
 	case CompilePush:
 		subprog, err := ctx.WithSubprog(nil, func() error {
-			return n.Compile(ctx, CompileEmit)
+			for _, node := range nodes {
+				err := node.Compile(ctx, mode)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
 		})
 		if err != nil {
 			return err
@@ -299,7 +305,7 @@ func (n *CompoundNode) Compile(ctx *CompileContext, mode int) error {
 		ctx.CallSubprogNA(CompilePush, subprog)
 
 	default:
-		for _, node := range n.Nodes {
+		for _, node := range nodes {
 			err := node.Compile(ctx, mode)
 			if err != nil {
 				return err
@@ -307,6 +313,10 @@ func (n *CompoundNode) Compile(ctx *CompileContext, mode int) error {
 		}
 	}
 	return nil
+}
+
+func (n *CompoundNode) Compile(ctx *CompileContext, mode int) error {
+	return compileNodes(ctx, n.Nodes, mode)
 }
 
 func (n *AttrNode) Compile(ctx *CompileContext, mode int) error {
@@ -482,11 +492,9 @@ func (n *IfNode) Compile(ctx *CompileContext, mode int) (err error) {
 		ctx.pushInstr(jumpFalse, 0, "")
 
 		ctx.pushInstr(discardPop, 0, "")
-		for _, n := range b.Body {
-			err = n.Compile(ctx, mode)
-			if err != nil {
-				return err
-			}
+		err = compileNodes(ctx, b.Body, mode)
+		if err != nil {
+			return
 		}
 
 		jumpLabels = append(jumpLabels, jumpLabel{len(ctx.code), i, labelEnd})
@@ -500,11 +508,9 @@ func (n *IfNode) Compile(ctx *CompileContext, mode int) (err error) {
 
 	// compile the alternative (else) branch
 	branchStarts[len(n.Branches)] = len(ctx.code)
-	for _, n := range n.Alt {
-		err = n.Compile(ctx, mode)
-		if err != nil {
-			return
-		}
+	err = compileNodes(ctx, n.Alt, mode)
+	if err != nil {
+		return
 	}
 
 	end := len(ctx.code)
@@ -532,7 +538,7 @@ func (n *DeclareNode) Compile(ctx *CompileContext, mode int) error {
 	return nil
 }
 
-func (n *ForNode) Compile(ctx *CompileContext, mode int) error {
+func (n *ForNode) compileEmit(ctx *CompileContext) error {
 	var loopJumps []loopJump
 	err := n.Expr.Compile(ctx, CompilePush)
 	if err != nil {
@@ -548,7 +554,7 @@ func (n *ForNode) Compile(ctx *CompileContext, mode int) error {
 	ctx.pushInstr(iterNextOrJump, 0, n.Var)
 	err = ctx.WithLoopJumps(&loopJumps, func() error {
 		for _, n := range n.Body {
-			err := n.Compile(ctx, mode)
+			err := n.Compile(ctx, CompileEmit)
 			if err != nil {
 				return err
 			}
@@ -574,6 +580,21 @@ func (n *ForNode) Compile(ctx *CompileContext, mode int) error {
 	}
 	return nil
 }
+func (n *ForNode) Compile(ctx *CompileContext, mode int) error {
+	switch mode {
+	case CompilePush:
+		subprog, err := ctx.WithSubprog(nil, func() error { return n.compileEmit(ctx) })
+		if err != nil {
+			return err
+		}
+		ctx.CallSubprogNA(mode, subprog)
+		return nil
+	case CompileEmit:
+		return n.compileEmit(ctx)
+	default:
+		return nil
+	}
+}
 
 func (n *IncludeNode) Compile(ctx *CompileContext, mode int) error {
 	if name, ok := n.Name.(*ValueNode); ok {
@@ -598,12 +619,7 @@ func (discardFilter) Filter(s string) (string, error) {
 
 func (n *DiscardNode) Compile(ctx *CompileContext, mode int) error {
 	ctx.PushOutputFilter(DiscardFilter)
-	for _, n := range n.Body {
-		err := n.Compile(ctx, mode)
-		if err != nil {
-			return err
-		}
-	}
+	compileNodes(ctx, n.Body, mode)
 	ctx.PopOutputFilter()
 	return nil
 }

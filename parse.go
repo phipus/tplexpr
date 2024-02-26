@@ -154,6 +154,15 @@ func (p *Parser) parseAtom() (n Node, err error) {
 		p.consume()
 		n = &ObjectNode{extend, keys}
 		return
+	case TokenIf:
+		n, err = p.parseIf()
+		return
+	case TokenFor:
+		n, err = p.parseFor()
+		return
+	case TokenInclude:
+		n, err = p.parseInclude()
+		return
 	case TokenLeftParen:
 		// find the matching closing paren
 		open := 1
@@ -268,8 +277,7 @@ func (p *Parser) parsePostfix() (n Node, err error) {
 			if v, ok := n.(*VarNode); ok {
 				n = &CallNode{v.Name, args}
 			} else {
-				err = fmt.Errorf("%w: Value is not callable", ErrSyntax)
-				return
+				n = &DynCallNode{n, args}
 			}
 		case TokenDot:
 			p.consume()
@@ -518,7 +526,7 @@ var templateEndTokens = map[TokenType]bool{
 	TokenEndBlock: true,
 }
 
-func (p *Parser) parseTemplate() (n Node, err error) {
+func (p *Parser) parseBlock() (n Node, err error) {
 	t := p.getToken()
 	if t.Type != TokenBlock {
 		err = p.errUnexpected("template")
@@ -816,15 +824,9 @@ func (p *Parser) ParseStmt() (n Node, err error) {
 		p.consume()
 		n = &ValueNode{string(t.Value)}
 	case TokenBlock:
-		n, err = p.parseTemplate()
-	case TokenIf:
-		n, err = p.parseIf()
-	case TokenFor:
-		n, err = p.parseFor()
+		n, err = p.parseBlock()
 	case TokenDeclare:
 		n, err = p.parseDeclare()
-	case TokenInclude:
-		n, err = p.parseInclude()
 	case TokenDiscard:
 		n, err = p.parseDiscard()
 	default:
