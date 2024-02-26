@@ -328,21 +328,40 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 		case popOutputFilter:
 			pushedOutputFilters--
 			c.outputFilters = c.outputFilters[:len(c.outputFilters)-1]
-		case includeTemplate:
+		case emitTemplate:
 			err = evalTemplate(c, instr.sarg, wr)
 			if err != nil {
 				return
 			}
-		case includeTemplateDyn:
-			nameValue := stack.Pop()
-			name, err := nameValue.String()
+		case pushTemplate:
+			wr := returnValueBuilder{}
+			err = evalTemplate(c, instr.sarg, &wr)
+			if err != nil {
+				return
+			}
+			stack.Push(wr.Value())
+		case emitTemplateDyn:
+			name := ""
+			name, err = stack.Pop().String()
 			if err != nil {
 				return err
 			}
 			err = evalTemplate(c, name, wr)
 			if err != nil {
-				return err
+				return
 			}
+		case pushTemplateDyn:
+			name := ""
+			name, err = stack.Pop().String()
+			if err != nil {
+				return
+			}
+			wr := returnValueBuilder{}
+			err = evalTemplate(c, name, &wr)
+			if err != nil {
+				return
+			}
+			stack.Push(wr.Value())
 		case assignKey:
 			value := stack.Pop()
 

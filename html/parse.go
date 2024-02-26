@@ -618,16 +618,8 @@ func parseSlot(to *[]tplexpr.Node, s *Scanner) error {
 
 	*to = append(*to, &tplexpr.OrNode{
 		Exprs: []tplexpr.Node{
-			&tplexpr.DynCallNode{
-				Value: &tplexpr.SubprogNode{
-					Prog: expr,
-				},
-			},
-			&tplexpr.DynCallNode{
-				Value: &tplexpr.SubprogNode{
-					Prog: &tplexpr.CompoundNode{Nodes: alt},
-				},
-			},
+			expr,
+			&tplexpr.CompoundNode{Nodes: alt},
 		},
 	})
 	return nil

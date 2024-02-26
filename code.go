@@ -44,8 +44,10 @@ const (
 	endScope
 	pushOutputFilter
 	popOutputFilter
-	includeTemplate
-	includeTemplateDyn
+	emitTemplate
+	pushTemplate
+	emitTemplateDyn
+	pushTemplateDyn
 	assignKey
 	assignKeyDyn
 	pushObject

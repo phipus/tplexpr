@@ -198,6 +198,24 @@ func (c *CompileContext) Number(mode int, value string) {
 	}
 }
 
+func (c *CompileContext) IncludeTemplate(mode int, name string) {
+	switch mode {
+	case CompileEmit:
+		c.pushInstr(emitTemplate, 0, name)
+	case CompilePush:
+		c.pushInstr(pushTemplate, 0, name)
+	}
+}
+
+func (c *CompileContext) IncludeTemplateDyn(mode int) {
+	switch mode {
+	case CompileEmit:
+		c.pushInstr(emitTemplateDyn, 0, "")
+	case CompilePush:
+		c.pushInstr(pushTemplateDyn, 0, "")
+	}
+}
+
 func (c *CompileContext) PushOutputFilter(f ValueFilter) {
 	idx, ok := c.valueFilterMap[f]
 	if !ok {
@@ -559,13 +577,13 @@ func (n *ForNode) Compile(ctx *CompileContext, mode int) error {
 
 func (n *IncludeNode) Compile(ctx *CompileContext, mode int) error {
 	if name, ok := n.Name.(*ValueNode); ok {
-		ctx.pushInstr(includeTemplate, 0, name.Value)
+		ctx.IncludeTemplate(mode, name.Value)
 	} else {
 		err := n.Name.Compile(ctx, CompilePush)
 		if err != nil {
 			return err
 		}
-		ctx.pushInstr(includeTemplateDyn, 0, "")
+		ctx.IncludeTemplateDyn(mode)
 	}
 	return nil
 }
