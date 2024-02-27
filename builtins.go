@@ -1,6 +1,8 @@
 package tplexpr
 
 import (
+	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -294,6 +296,99 @@ func BuiltinReversed(args Args) (Value, error) {
 	return reversed, nil
 }
 
+func BuiltinUpper(args Args) (Value, error) {
+	s, err := args.Arg(0).String()
+	if err != nil {
+		return nil, err
+	}
+	return StringValue(strings.ToUpper(s)), nil
+}
+
+func BuiltinLower(args Args) (Value, error) {
+	s, err := args.Arg(0).String()
+	if err != nil {
+		return nil, err
+	}
+	return StringValue(strings.ToLower(s)), nil
+}
+
+func valueToJSON(v Value, t *interface{}) error {
+	switch v.Kind() {
+	case KindNil:
+		*t = nil
+		return nil
+	case KindBool:
+		*t = v.Bool()
+		return nil
+	case KindNumber:
+		nr, err := v.Number()
+		if err != nil {
+			return err
+		}
+		*t = nr
+		return nil
+	case KindString:
+		s, err := v.String()
+		if err != nil {
+			return err
+		}
+		*t = s
+		return nil
+	case KindList, KindIterator:
+		lst, err := v.List()
+		if err != nil {
+			return err
+		}
+		tl := make([]interface{}, len(lst))
+		for i := range lst {
+			err = valueToJSON(lst[i], &tl[i])
+			if err != nil {
+				return err
+			}
+		}
+		*t = tl
+		return nil
+	case KindObject:
+		obj, err := v.Object()
+		if err != nil {
+			return err
+		}
+		to := make(map[string]interface{})
+		for _, key := range obj.Keys() {
+			v, ok := obj.Key(key)
+			if ok {
+				var t interface{}
+				err = valueToJSON(v, &t)
+				if err != nil {
+					return err
+				}
+				to[key] = t
+			}
+		}
+		*t = to
+		return nil
+	case KindFunction:
+		r, err := Call(v, nil)
+		if err != nil {
+			return err
+		}
+		return valueToJSON(r, t)
+	default:
+		*t = fmt.Sprintf("%v", v)
+		return nil
+	}
+}
+
+func BuiltinJSON(args Args) (Value, error) {
+	var t interface{}
+	err := valueToJSON(args.Arg(0), &t)
+	if err != nil {
+		return nil, err
+	}
+	d, err := json.Marshal(t)
+	return StringValue(d), err
+}
+
 func AddBuiltins(c *Context) {
 	c.Declare("map", FuncValue(BuiltinMap))
 	c.Declare("filter", FuncValue(BuiltinFilter))
@@ -309,4 +404,7 @@ func AddBuiltins(c *Context) {
 	c.Declare("get", FuncValue(BuiltinGet))
 	c.Declare("sorted", FuncValue(BuiltinSorted))
 	c.Declare("reversed", FuncValue(BuiltinReversed))
+	c.Declare("upper", FuncValue(BuiltinUpper))
+	c.Declare("lower", FuncValue(BuiltinLower))
+	c.Declare("json", FuncValue(BuiltinJSON))
 }
