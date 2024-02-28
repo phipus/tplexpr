@@ -45,13 +45,13 @@ type rangeIter struct {
 
 var _ ValueIter = &rangeIter{}
 
-func (r *rangeIter) Next() (Value, bool, error) {
+func (r *rangeIter) Next() (Value, error) {
 	if (r.step > 0 && r.start >= r.stop) || (r.step < 0 && r.start <= r.stop) {
-		return nil, false, nil
+		return nil, ErrIterExhausted
 	}
 	v := NumberValue(r.start)
 	r.start += r.step
-	return v, true, nil
+	return v, nil
 }
 
 func BuiltinRange(args Args) (Value, error) {

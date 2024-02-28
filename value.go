@@ -77,8 +77,10 @@ type Value interface {
 	Call(args Args, wr ValueWriter) error
 }
 
+var ErrIterExhausted = errors.New("tplexpr: Iterator exhausted")
+
 type ValueIter interface {
-	Next() (Value, bool, error)
+	Next() (Value, error)
 }
 
 type Object interface {
@@ -482,12 +484,12 @@ func (v IterValue) Number() (float64, error) {
 func (v IterValue) String() (string, error) {
 	sb := strings.Builder{}
 	for i := 0; i < IterListLimit; i++ {
-		v, ok, err := v.I.Next()
+		v, err := v.I.Next()
 		if err != nil {
+			if err == ErrIterExhausted {
+				return sb.String(), nil
+			}
 			return "", err
-		}
-		if !ok {
-			return sb.String(), nil
 		}
 
 		if i != 0 {
@@ -509,12 +511,12 @@ var ErrIterListLimit = errors.New("iterator to list limit exhausted")
 func (v IterValue) List() ([]Value, error) {
 	lst := []Value{}
 	for i := 0; i < IterListLimit; i++ {
-		v, ok, err := v.I.Next()
+		v, err := v.I.Next()
 		if err != nil {
+			if err == ErrIterExhausted {
+				return lst, nil
+			}
 			return lst, err
-		}
-		if !ok {
-			return lst, nil
 		}
 		lst = append(lst, v)
 	}
@@ -530,14 +532,14 @@ func (v IterValue) Object() (Object, error) {
 }
 
 func (v IterValue) Call(args Args, wr ValueWriter) error {
-	vv, ok, err := v.I.Next()
+	vv, err := v.I.Next()
 	if err != nil {
-		return err
+		if err == ErrIterExhausted {
+			vv = Nil
+			err = nil
+		}
 	}
-	if ok {
-		return wr.WriteValue(vv)
-	}
-	return wr.WriteValue(Nil)
+	return wr.WriteValue(vv)
 }
 
 type subprogValue struct {

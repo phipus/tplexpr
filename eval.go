@@ -304,15 +304,15 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 			}
 			c.iters = append(c.iters, iter)
 		case iterNextOrJump:
-			ok := false
-			value, ok, err = c.iters[len(c.iters)-1].Next()
-			if err != nil {
-				return
-			}
-			if ok {
+			value, err = c.iters[len(c.iters)-1].Next()
+			if err == nil {
 				c.Assign(instr.sarg, value)
 			} else {
-				ip += instr.iarg
+				if err == ErrIterExhausted {
+					ip += instr.iarg
+				} else {
+					return
+				}
 			}
 		case discardIter:
 			c.iters = c.iters[:len(c.iters)-1]
@@ -667,13 +667,13 @@ type singleValueIter struct {
 
 var _ ValueIter = &singleValueIter{}
 
-func (i *singleValueIter) Next() (Value, bool, error) {
+func (i *singleValueIter) Next() (Value, error) {
 	if i.v != nil {
 		v := i.v
 		i.v = nil
-		return v, true, nil
+		return v, nil
 	}
-	return nil, false, nil
+	return nil, ErrIterExhausted
 }
 
 type listIter struct {
@@ -682,11 +682,11 @@ type listIter struct {
 
 var _ ValueIter = &listIter{}
 
-func (l *listIter) Next() (Value, bool, error) {
+func (l *listIter) Next() (Value, error) {
 	if len(l.list) > 0 {
 		v := l.list[0]
 		l.list = l.list[1:]
-		return v, true, nil
+		return v, nil
 	}
-	return nil, false, nil
+	return nil, ErrIterExhausted
 }

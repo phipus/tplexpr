@@ -346,9 +346,12 @@ type reflectChanIter struct {
 
 var _ ValueIter = reflectChanIter{}
 
-func (i reflectChanIter) Next() (v Value, ok bool, err error) {
+func (i reflectChanIter) Next() (v Value, err error) {
 	rcv, ok := i.ch.Recv()
-	return Reflect(rcv), ok, nil
+	if !ok {
+		err = ErrIterExhausted
+	}
+	return Reflect(rcv), err
 }
 
 type reflectChan struct {
