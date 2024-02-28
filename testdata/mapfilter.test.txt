@@ -1,0 +1,3 @@
+${range(10).filter((x) => "${mod(x, 2) == 0}")}
+${range(10).map((x) => "${x * x}")}
+${range(10).map((x) => "${x * x}").filter((x) => "${x.mod(2) == 0}")}

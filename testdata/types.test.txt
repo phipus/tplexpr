@@ -1,0 +1,24 @@
+${
+    declare(l, list(1, 2, 3))
+    declare(s, "Hello World")
+    declare(s1, "World")
+    declare(n, 42)
+    declare(o, object(a => 1, b => 2, n => n))
+    declare(f1, () => "Hello $s1")
+    block(f2, name)
+        "Hello $name"
+    endblock
+%}
+
+${nil.kind()}
+${true.kind()}
+${38.kind()}
+${''.kind()}
+${l.kind()}
+${o.kind()}
+${f1.kind()}
+${f2.kind()}
+${range(0).kind()}
+
+${nil.toNumber()}
+${nil.toList()}

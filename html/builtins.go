@@ -8,7 +8,7 @@ import (
 )
 
 func BuiltinBuildQueryParams(args tplexpr.Args) (tplexpr.Value, error) {
-	obj, err := args.Arg(0).Object()
+	obj, err := args.Get(0).Object()
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func BuiltinBuildQueryParams(args tplexpr.Args) (tplexpr.Value, error) {
 }
 
 func BuiltinQueryEscape(args tplexpr.Args) (tplexpr.Value, error) {
-	str, err := args.Arg(0).String()
+	str, err := args.Get(0).String()
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func BuiltinQueryEscape(args tplexpr.Args) (tplexpr.Value, error) {
 }
 
 func BuiltinPathEscape(args tplexpr.Args) (tplexpr.Value, error) {
-	str, err := args.Arg(0).String()
+	str, err := args.Get(0).String()
 	if err != nil {
 		return nil, err
 	}

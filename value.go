@@ -7,6 +7,18 @@ import (
 	"strings"
 )
 
+var (
+	Nil           Value = nilValue{}
+	False         Value = BoolValue(false)
+	True          Value = BoolValue(true)
+	EmptyString   Value = StringValue("")
+	Zero          Value = NumberValue(0)
+	EmptyList     Value = ListValue{}
+	EmptyObject   Value = ObjectValue{}
+	NopFunc       Value = FuncValue(func(args Args) (Value, error) { return Nil, nil })
+	EmptyIterator Value = IterValue{&listIter{}}
+)
+
 type ValueKind int
 
 const (
@@ -34,6 +46,8 @@ const (
 func (v ValueKind) String() string {
 	s := ""
 	switch v {
+	case KindNil:
+		s = KindNilName
 	case KindString:
 		s = KindStringName
 	case KindBool:
@@ -120,8 +134,6 @@ func (e *ErrType) Error() string {
 }
 
 type nilValue struct{}
-
-var Nil Value = nilValue{}
 
 func (n nilValue) Kind() ValueKind {
 	return KindNil
@@ -400,7 +412,11 @@ func (f FuncValue) Kind() ValueKind {
 }
 
 func (f FuncValue) Number() (float64, error) {
-	return 0, &ErrType{opConvert, KindFunctionName, conTO, KindNumberName}
+	value, err := f(Args{})
+	if err != nil {
+		return 0, err
+	}
+	return value.Number()
 }
 
 func (f FuncValue) Bool() bool {
@@ -537,7 +553,7 @@ func (s *subprogValue) eval(args Args, wr ValueWriter) error {
 	defer s.ctx.EndScope()
 
 	for i, argName := range s.args {
-		s.ctx.Declare(argName, args.Arg(i))
+		s.ctx.Declare(argName, args.Get(i))
 	}
 
 	return EvalRaw(s.ctx, s.code, wr)
@@ -548,7 +564,7 @@ func (s *subprogValue) evalString(args Args) (string, error) {
 	defer s.ctx.EndScope()
 
 	for i, argName := range s.args {
-		s.ctx.Declare(argName, args.Arg(i))
+		s.ctx.Declare(argName, args.Get(i))
 	}
 
 	return EvalString(s.ctx, s.code)

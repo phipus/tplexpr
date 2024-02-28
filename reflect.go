@@ -45,33 +45,37 @@ func Reflect(v interface{}) Value {
 		return ObjectValue(v)
 	}
 
-	rv := reflect.ValueOf(v)
-	for {
-		switch rv.Kind() {
-		case reflect.Bool:
-			return reflectBool{rv}
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			return reflectNumber{rv: rv, number: float64(rv.Int())}
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-			return reflectNumber{rv: rv, number: float64(rv.Uint())}
-		case reflect.Float32, reflect.Float64:
-			return reflectNumber{rv: rv, number: rv.Float()}
-		case reflect.Array, reflect.Slice:
-			return reflectList{rv: rv}
-		case reflect.Chan:
-			return reflectChan{rv: rv}
-		case reflect.Func, reflect.Interface, reflect.Map, reflect.Struct:
-			return &reflectObjectValue{obj: reflectObject{rv: rv}}
-		case reflect.Pointer:
-			if rv.IsNil() {
-				return Nil
-			}
-			rv = rv.Elem()
-		case reflect.String:
-			return reflectString{rv: rv}
-		default:
+	switch rv := reflect.ValueOf(v); rv.Kind() {
+	case reflect.Bool:
+		return reflectBool{rv}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return reflectNumber{rv: rv, number: float64(rv.Int())}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return reflectNumber{rv: rv, number: float64(rv.Uint())}
+	case reflect.Float32, reflect.Float64:
+		return reflectNumber{rv: rv, number: rv.Float()}
+	case reflect.Array, reflect.Slice:
+		return reflectList{rv: rv}
+	case reflect.Chan:
+		return reflectChan{rv: rv}
+	case reflect.Func, reflect.Interface, reflect.Map, reflect.Struct:
+		return &reflectObjectValue{obj: reflectObject{rv: rv}}
+	case reflect.Pointer:
+		if rv.IsNil() {
 			return Nil
 		}
+		elem := rv.Elem()
+		switch elem.Kind() {
+		case reflect.Func, reflect.Interface, reflect.Map, reflect.Struct:
+			return &reflectObjectValue{obj: reflectObject{rv: rv}}
+		default:
+			return Reflect(elem)
+		}
+
+	case reflect.String:
+		return reflectString{rv: rv}
+	default:
+		return Nil
 	}
 }
 
@@ -224,45 +228,93 @@ type reflectObject struct {
 
 var _ Object = &reflectObject{}
 
-func (o *reflectObject) Key(name string) (Value, bool) {
-	if v, ok := o.m[name]; ok {
-		return v, true
-	}
-
-	switch o.rv.Kind() {
+func getReflectKey(rv reflect.Value, name string, derefPointer bool) (Value, bool) {
+	switch rv.Kind() {
 	case reflect.Array, reflect.Slice:
 		idx, err := strconv.ParseInt(name, 10, 64)
-		if err == nil && idx >= 0 && idx < int64(o.rv.Len()) {
-			return Reflect(o.rv.Index(int(idx)).Interface()), true
+		if err == nil && idx >= 0 && idx < int64(rv.Len()) {
+			return Reflect(rv.Index(int(idx)).Interface()), true
 		}
 	case reflect.Map:
-		typ := o.rv.Type()
+		typ := rv.Type()
 		if reflect.TypeOf("").ConvertibleTo(typ.Key()) {
 			key := reflect.ValueOf(name).Convert(typ.Key())
-			v := o.rv.MapIndex(key)
+			v := rv.MapIndex(key)
 			if v != (reflect.Value{}) {
 				return Reflect(v.Interface()), true
 			}
 		}
 	case reflect.Struct:
-		typ := o.rv.Type()
+		typ := rv.Type()
 		field, ok := typ.FieldByName(name)
 		if !ok || !field.IsExported() {
 			break
 		}
-		return Reflect(o.rv.FieldByName(field.Name).Interface()), true
+		return Reflect(rv.FieldByName(field.Name).Interface()), true
+	case reflect.Pointer:
+		if derefPointer {
+			if v, ok := getReflectKey(rv.Elem(), name, false); ok {
+				return v, true
+			}
+		}
+
 	}
 
-	typ := o.rv.Type()
+	typ := rv.Type()
 	method, ok := typ.MethodByName(name)
 	if !ok {
 		return nil, false
 	}
-	if method.IsExported() && method.Type.NumIn() == 0 && method.Type.NumOut() == 1 {
-		v := o.rv.MethodByName(name).Call(nil)[0]
+	if method.IsExported() && method.Type.NumIn() == 1 /* receiver */ && method.Type.NumOut() == 1 {
+		v := rv.MethodByName(name).Call(nil)[0]
 		return Reflect(v.Interface()), true
 	}
 	return nil, false
+}
+
+func (o *reflectObject) Key(name string) (Value, bool) {
+	if v, ok := o.m[name]; ok {
+		return v, true
+	}
+	return getReflectKey(o.rv, name, true)
+}
+
+func getReflectKeys(rv reflect.Value, keys map[string]struct{}, derefPointer bool) {
+	switch rv.Kind() {
+	case reflect.Array, reflect.Slice:
+		for i := rv.Len() - 1; i >= 0; i-- {
+			keys[fmt.Sprintf("%d", i)] = struct{}{}
+		}
+
+	case reflect.Map:
+		typ := rv.Type()
+		if reflect.TypeOf("").ConvertibleTo(typ.Key()) {
+			for _, key := range rv.MapKeys() {
+				keys[fmt.Sprintf("%v", key.Interface())] = struct{}{}
+			}
+		}
+	case reflect.Struct:
+		typ := rv.Type()
+		for i := typ.NumField() - 1; i >= 0; i-- {
+			field := typ.Field(i)
+			if field.IsExported() {
+				keys[field.Name] = struct{}{}
+			}
+		}
+	case reflect.Pointer:
+		if derefPointer {
+			getReflectKeys(rv.Elem(), keys, false)
+		}
+	}
+
+	// get methods
+	typ := rv.Type()
+	for i := typ.NumMethod() - 1; i >= 0; i-- {
+		method := typ.Method(i)
+		if method.IsExported() && method.Type.NumIn() == 0 && method.Type.NumOut() == 1 {
+			keys[method.Name] = struct{}{}
+		}
+	}
 }
 
 func (o *reflectObject) Keys() []string {
@@ -271,43 +323,13 @@ func (o *reflectObject) Keys() []string {
 	for key := range o.m {
 		keys[key] = struct{}{}
 	}
-
-	switch o.rv.Kind() {
-	case reflect.Array, reflect.Slice:
-		for i := o.rv.Len() - 1; i >= 0; i-- {
-			keys[fmt.Sprintf("%d", i)] = struct{}{}
-		}
-
-	case reflect.Map:
-		typ := o.rv.Type()
-		if reflect.TypeOf("").ConvertibleTo(typ.Key()) {
-			for _, key := range o.rv.MapKeys() {
-				keys[fmt.Sprintf("%v", key.Interface())] = struct{}{}
-			}
-		}
-	case reflect.Struct:
-		typ := o.rv.Type()
-		for i := typ.NumField() - 1; i >= 0; i-- {
-			field := typ.Field(i)
-			if field.IsExported() {
-				keys[field.Name] = struct{}{}
-			}
-		}
-	}
-
-	// get methods
-	typ := o.rv.Type()
-	for i := typ.NumMethod() - 1; i >= 0; i-- {
-		method := typ.Method(i)
-		if method.IsExported() && method.Type.NumIn() == 0 && method.Type.NumOut() == 1 {
-			keys[method.Name] = struct{}{}
-		}
-	}
+	getReflectKeys(o.rv, keys, true)
 
 	keyList := make([]string, 0, len(keys))
 	for key := range keys {
 		keyList = append(keyList, key)
 	}
+
 	return keyList
 }
 

@@ -1,0 +1,12 @@
+nil
+bool
+number
+string
+list
+object
+function
+function
+iterator
+
+0
+

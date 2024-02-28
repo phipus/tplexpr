@@ -5,3 +5,7 @@ ${r.X.sorted()}
 ${r.Opt}
 ${r.Numbers.sorted(true)}
 ${r.Floats.reversed()}
+${r.GreetS}
+${r.M.one}
+${r.M.two}
+${r.Numbers.get(0)}

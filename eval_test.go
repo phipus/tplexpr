@@ -1,6 +1,7 @@
 package tplexpr
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"strings"
@@ -42,7 +43,7 @@ func TestEval(t *testing.T) {
 		{`${"" && "Hello"}`, "", nil},
 		{`${"Hello" && "World"}`, "World", nil},
 		{`${"Hello" && ""}`, "", nil},
-		{`${"1".number() + "2".number()}`, "3", nil},
+		{`${"1".toNumber() + "2".toNumber()}`, "3", nil},
 		{`${"1" + "2"}`, "12", nil},
 		{`${2 + 2 / 4}`, "2.5", nil},
 		{`${declare(name, "Sina")}Hello $name`, "Hello Sina", nil},
@@ -167,6 +168,26 @@ func (t *evalTestImpl) Eval(tt *testing.T, templateName string, expectedResult s
 	}
 }
 
+type testSubReflect struct {
+	S string
+	B bool
+	I int
+}
+
+type testReflect struct {
+	Numbers []int
+	Floats  []float64
+	S       string
+	X       interface{}
+	Opt     *testReflect
+	Sub     testSubReflect
+	M       map[string]int
+}
+
+func (r *testReflect) GreetS() string {
+	return fmt.Sprintf("Hello %s", r.S)
+}
+
 func TestEvalFile(t *testing.T) {
 	fsys := os.DirFS("testdata")
 	glob := "*.test.txt"
@@ -183,31 +204,20 @@ func TestEvalFile(t *testing.T) {
 		return
 	}
 
-	type subReflect struct {
-		S string
-		B bool
-		I int
-	}
-
-	type reflect struct {
-		Numbers []int
-		Floats  []float64
-		S       string
-		X       interface{}
-		Opt     *reflect
-		Sub     subReflect
-	}
-
-	r := Reflect(reflect{
+	r := Reflect(&testReflect{
 		Numbers: []int{1, 2, 3, 4},
 		Floats:  []float64{0.25, 0.5, 0.75, 1},
 		S:       "Hello",
-		X:       &subReflect{S: "World", B: false, I: 42},
+		X:       &testSubReflect{S: "World", B: false, I: 42},
 		Opt:     nil,
-		Sub: subReflect{
+		Sub: testSubReflect{
 			S: "Sub reflect Value",
 			B: true,
 			I: 48,
+		},
+		M: map[string]int{
+			"one": 1,
+			"two": 2,
 		},
 	})
 

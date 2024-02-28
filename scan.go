@@ -304,7 +304,7 @@ beginScan:
 			return
 		case '+':
 			if s.pos+1 < len(s.input) && unicode.IsDigit(rune(s.input[s.pos+1])) {
-				t = s.scanNumber(c)
+				s.tryScanNumber(c, &t) // must succeed
 				return
 			}
 			s.pos += 1
@@ -313,7 +313,7 @@ beginScan:
 			return
 		case '-':
 			if s.pos+1 < len(s.input) && unicode.IsDigit(rune(s.input[s.pos+1])) {
-				t = s.scanNumber(c)
+				s.tryScanNumber(c, &t) // must succeed
 				return
 			}
 			s.pos += 1
@@ -412,8 +412,8 @@ beginScan:
 				t.Value = value
 				return
 			}
-			if isNumberStartByte(c) {
-				t = s.scanNumber(c)
+
+			if s.tryScanNumber(c, &t) {
 				return
 			}
 
@@ -439,27 +439,45 @@ beginScan:
 	}
 }
 
-func (s *Scanner) scanNumber(startByte byte) (t Token) {
-	c := startByte
+func (s *Scanner) tryScanNumber(startByte byte, t *Token) bool {
+	var value []byte
 
-	value := []byte{c}
-	s.pos += 1
+	switch {
+	case startByte >= '0' && startByte <= '9', startByte == '+', startByte == '-':
+		value = append(value, startByte)
+		s.pos += 1
+	default:
+		return false
+	}
 
+scan:
 	for s.pos < len(s.input) {
-		c = s.input[s.pos]
-
-		if isNumberByte(c) {
-			s.pos += 1
+		c := s.input[s.pos]
+		switch {
+		case c >= '0' && c <= '9', c == '+', c == '-', c == 'e', c == 'E':
 			value = append(value, c)
-		} else {
-			break
+			s.pos += 1
+		case c == '.':
+			if s.pos+1 >= len(s.input) {
+				break scan
+			}
+			next := s.input[s.pos+1]
+			switch {
+			case next >= '0' && next <= '9':
+				value = append(value, c, next)
+				s.pos += 2
+			default:
+				break scan
+			}
+		default:
+			break scan
 		}
 	}
 
 	t.End = s.pos
 	t.Type = TokenNumber
 	t.Value = value
-	return
+	return true
 }
 
 func (s *Scanner) errUnexpectedInput() error {
@@ -478,24 +496,6 @@ func isIdentByte(c byte) bool {
 func isIdentStartByte(c byte) bool {
 	switch {
 	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c == '_':
-		return true
-	default:
-		return false
-	}
-}
-
-func isNumberByte(c byte) bool {
-	switch {
-	case c >= '0' && c <= '9', c == '.', c == 'e', c == 'E', c == '+', c == '-':
-		return true
-	default:
-		return false
-	}
-}
-
-func isNumberStartByte(c byte) bool {
-	switch {
-	case c >= '0' && c <= '9', c == '+', c == '-':
 		return true
 	default:
 		return false
