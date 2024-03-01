@@ -500,12 +500,13 @@ func (n *IfNode) Compile(ctx *CompileContext, mode int) (err error) {
 		jumpLabels = append(jumpLabels, jumpLabel{len(ctx.code), i, labelNextBranchStart})
 		ctx.pushInstr(jumpFalse, 0, "")
 
+		ctx.BeginScope()
 		ctx.pushInstr(discardPop, 0, "")
 		err = compileNodes(ctx, b.Body, mode)
 		if err != nil {
 			return
 		}
-
+		ctx.EndScope()
 		jumpLabels = append(jumpLabels, jumpLabel{len(ctx.code), i, labelEnd})
 		ctx.pushInstr(jump, 0, "")
 	}
@@ -517,10 +518,12 @@ func (n *IfNode) Compile(ctx *CompileContext, mode int) (err error) {
 
 	// compile the alternative (else) branch
 	branchStarts[len(n.Branches)] = len(ctx.code)
+	ctx.BeginScope()
 	err = compileNodes(ctx, n.Alt, mode)
 	if err != nil {
 		return
 	}
+	ctx.EndScope()
 
 	end := len(ctx.code)
 
@@ -555,8 +558,8 @@ func (n *ForNode) compileEmit(ctx *CompileContext) error {
 	}
 
 	ctx.pushInstr(pushIter, 0, "")
-	ctx.pushInstr(beginScope, 0, "")
-	ctx.pushInstr(push, 0, "")
+	ctx.BeginScope()
+	ctx.pushInstr(pushNil, 0, "")
 	ctx.pushInstr(declarePop, 0, n.Var)
 
 	nextIndex := len(ctx.code)
@@ -577,6 +580,8 @@ func (n *ForNode) compileEmit(ctx *CompileContext) error {
 	ctx.pushInstr(jump, nextIndex-len(ctx.code)-1, "")
 	endIndex := len(ctx.code)
 	ctx.code[nextIndex].iarg = endIndex - nextIndex - 1
+
+	ctx.EndScope()
 
 	// update the loop labels
 	for _, jmp := range loopJumps {
