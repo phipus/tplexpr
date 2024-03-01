@@ -53,8 +53,6 @@ var numberBuiltins = map[string]Value{
 	"log":         mapNumber1(math.Log),
 	"log10":       mapNumber1(math.Log10),
 	"log2":        mapNumber1(math.Log2),
-	"max":         FuncValue(BuiltinMax),
-	"min":         FuncValue(BuiltinMin),
 	"mod":         mapNumber2(math.Mod),
 	"NaN":         NumberValue(math.NaN()),
 	"pow":         mapNumber2(math.Pow),
@@ -80,52 +78,6 @@ func BuiltinIsInf(args Args) (Value, error) {
 	}
 	sign, err := args.GetDefault(1, Zero).Number()
 	return BoolValue(math.IsInf(nr, int(sign))), err
-}
-
-func BuiltinMax(args Args) (v Value, err error) {
-	if args.Len() <= 0 {
-		return Nil, nil
-	}
-
-	nrs := make([]float64, args.Len())
-
-	for i := range nrs {
-		nrs[i], err = args.Get(i).Number()
-		if err != nil {
-			return
-		}
-	}
-
-	max := nrs[0]
-	for i := 1; i < len(nrs); i++ {
-		if nrs[i] > max {
-			max = nrs[i]
-		}
-	}
-	return NumberValue(max), nil
-}
-
-func BuiltinMin(args Args) (v Value, err error) {
-	if args.Len() <= 0 {
-		return Nil, nil
-	}
-
-	nrs := make([]float64, args.Len())
-
-	for i := range nrs {
-		nrs[i], err = args.Get(i).Number()
-		if err != nil {
-			return
-		}
-	}
-
-	min := nrs[0]
-	for i := 1; i < len(nrs); i++ {
-		if nrs[i] < min {
-			min = nrs[i]
-		}
-	}
-	return NumberValue(min), nil
 }
 
 func AddNumberBuiltins(c *Context) {

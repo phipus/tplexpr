@@ -1,0 +1,6 @@
+${
+    declare(values, range(10).toList())
+%}
+
+${values.reduce((a, b) => "${(a >= b).then(a, b)}")}
+${values.reduce((a, b) => "${(a <= b).then(a, b)}")}

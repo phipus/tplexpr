@@ -309,17 +309,19 @@ func (p *Parser) parsePostfix() (n Node, err error) {
 
 				switch len(args) {
 				case 0:
-					n = &ValueNode{""}
+					n = &NilNode{}
 				case 1:
-					n = &OrNode{[]Node{
-						&AndNode{[]Node{n, args[0]}},
-						&ValueNode{""},
-					}}
+					n = &ThenNode{
+						Expr: n,
+						Pos:  args[0],
+						Alt:  &NilNode{},
+					}
 				case 2:
-					n = &OrNode{[]Node{
-						&AndNode{[]Node{n, args[0]}},
-						args[1],
-					}}
+					n = &ThenNode{
+						Expr: n,
+						Pos:  args[0],
+						Alt:  args[1],
+					}
 				default:
 					err = fmt.Errorf("%w: .then reiquires 0 to 2 arguments", ErrSyntax)
 				}

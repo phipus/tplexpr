@@ -9,3 +9,5 @@ ${r.GreetS}
 ${r.M.one}
 ${r.M.two}
 ${r.Numbers.get(0)}
+${r.Numbers.max()}
+${r.Numbers.min()}

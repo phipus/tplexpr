@@ -198,6 +198,15 @@ func (c *CompileContext) Number(mode int, value string) {
 	}
 }
 
+func (c *CompileContext) Nil(mode int) {
+	switch mode {
+	case CompileEmit:
+		c.pushInstr(emitNil, 0, "")
+	case CompilePush:
+		c.pushInstr(pushNil, 0, "")
+	}
+}
+
 func (c *CompileContext) IncludeTemplate(mode int, name string) {
 	switch mode {
 	case CompileEmit:
@@ -645,5 +654,39 @@ func (n *ObjectNode) Compile(ctx *CompileContext, mode int) error {
 	if mode == CompileEmit {
 		ctx.pushInstr(emitPop, 0, "")
 	}
+	return nil
+}
+
+func (n *NilNode) Compile(ctx *CompileContext, mode int) error {
+	ctx.Nil(mode)
+	return nil
+}
+
+func (n *ThenNode) Compile(ctx *CompileContext, mode int) error {
+	err := n.Expr.Compile(ctx, CompilePush)
+	if err != nil {
+		return err
+	}
+	jumpAltIdx := len(ctx.code)
+	ctx.pushInstr(jumpFalse, 0, "")
+	ctx.pushInstr(discardPop, 0, "")
+	err = n.Pos.Compile(ctx, mode)
+	if err != nil {
+		return err
+	}
+	jumpEndIdx := len(ctx.code)
+	ctx.pushInstr(jump, 0, "")
+
+	altIdx := len(ctx.code)
+	ctx.pushInstr(discardPop, 0, "")
+	err = n.Alt.Compile(ctx, mode)
+	if err != nil {
+		return err
+	}
+	endIdx := len(ctx.code)
+
+	// update the jumps
+	ctx.code[jumpAltIdx].iarg = altIdx - jumpAltIdx - 1
+	ctx.code[jumpEndIdx].iarg = endIdx - jumpEndIdx - 1
 	return nil
 }

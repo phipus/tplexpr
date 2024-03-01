@@ -112,3 +112,11 @@ type ObjectNode struct {
 type SingleValueNode struct {
 	Node Node
 }
+
+type NilNode struct{}
+
+type ThenNode struct {
+	Expr Node
+	Pos  Node
+	Alt  Node
+}

@@ -13,8 +13,8 @@ type Subprog struct {
 }
 
 type Context struct {
-	vars             map[string]Value
-	shadowed         []namedVar
+	vars             map[string]varValue
+	shadowed         []shadowedVar
 	scope            int
 	prevScopes       []int
 	subprogs         []Subprog
@@ -28,7 +28,7 @@ type Context struct {
 
 func NewContext() Context {
 	return Context{
-		vars: map[string]Value{},
+		vars: map[string]varValue{},
 	}
 }
 
@@ -45,14 +45,20 @@ func (c *Context) Clone() *Context {
 	return &clone
 }
 
-type namedVar struct {
+type shadowedVar struct {
 	name  string
 	value Value
+	scope int
 }
 
-func (c *Context) TryLookup(name string) (value Value, ok bool) {
-	value, ok = c.vars[name]
-	return
+type varValue struct {
+	value Value
+	scope int
+}
+
+func (c *Context) TryLookup(name string) (Value, bool) {
+	v, ok := c.vars[name]
+	return v.value, ok
 }
 
 type ErrName struct {
@@ -77,12 +83,20 @@ func (c *Context) Lookup(name string) (value Value, err error) {
 
 func (c *Context) Declare(name string, value Value) {
 	v := c.vars[name]
-	c.shadowed = append(c.shadowed, namedVar{name, v})
-	c.vars[name] = value
+	if v.scope != c.scope {
+		c.shadowed = append(c.shadowed, shadowedVar{name, v.value, v.scope})
+	}
+	c.vars[name] = varValue{value, c.scope}
 }
 
 func (c *Context) Assign(name string, value Value) {
-	c.vars[name] = value
+	v, ok := c.vars[name]
+	if ok {
+		c.vars[name] = varValue{value, v.scope}
+	} else {
+		c.shadowed = append(c.shadowed, shadowedVar{name, v.value, v.scope})
+		c.vars[name] = varValue{value, c.scope}
+	}
 }
 
 func (c *Context) BeginScope() {
@@ -97,7 +111,7 @@ func (c *Context) EndScope() {
 		if prevVar.value == nil {
 			delete(c.vars, prevVar.name)
 		} else {
-			c.vars[prevVar.name] = prevVar.value
+			c.vars[prevVar.name] = varValue{prevVar.value, prevVar.scope}
 		}
 	}
 
@@ -170,25 +184,25 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 			}
 			stack.Push(retBuilder.Value())
 		case emitCallDyn:
-			err = evalCallDyn(c, &stack, instr, wr)
+			err = evalCallDyn(&stack, instr, wr)
 			if err != nil {
 				return err
 			}
 		case pushCallDyn:
 			retBuilder := returnValueBuilder{}
-			err = evalCallDyn(c, &stack, instr, &retBuilder)
+			err = evalCallDyn(&stack, instr, &retBuilder)
 			if err != nil {
 				return err
 			}
 			stack.Push(retBuilder.Value())
 		case emitCallSubprogNA:
-			err = evalCallSubprogNA(c, &stack, instr, wr)
+			err = evalCallSubprogNA(c, instr, wr)
 			if err != nil {
 				return err
 			}
 		case pushCallSubprogNA:
 			retBuilder := returnValueBuilder{}
-			err = evalCallSubprogNA(c, &stack, instr, &retBuilder)
+			err = evalCallSubprogNA(c, instr, &retBuilder)
 			if err != nil {
 				return err
 			}
@@ -224,7 +238,7 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 			}
 			stack.Push(value)
 		case emitCompare:
-			value, err = evalCompare(c, &stack, instr)
+			value, err = evalCompare(&stack, instr)
 			if err != nil {
 				return err
 			}
@@ -233,7 +247,7 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 				return err
 			}
 		case pushCompare:
-			value, err = evalCompare(c, &stack, instr)
+			value, err = evalCompare(&stack, instr)
 			if err != nil {
 				return err
 			}
@@ -273,7 +287,7 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 				return err
 			}
 		case emitBinaryOP:
-			value, err = evalBinaryOP(c, &stack, instr)
+			value, err = evalBinaryOP(&stack, instr)
 			if err != nil {
 				return err
 			}
@@ -282,20 +296,27 @@ func EvalRaw(c *Context, code []Instr, wr ValueWriter) (err error) {
 				return err
 			}
 		case pushBinaryOP:
-			value, err = evalBinaryOP(c, &stack, instr)
+			value, err = evalBinaryOP(&stack, instr)
 			if err != nil {
 				return err
 			}
 			stack.Push(value)
 		case emitNumber:
-			value = evalNumber(c, instr)
+			value = evalNumber(instr)
 			err = wr.WriteValue(value)
 			if err != nil {
 				return err
 			}
 		case pushNumber:
-			value = evalNumber(c, instr)
+			value = evalNumber(instr)
 			stack.Push(value)
+		case emitNil:
+			err = wr.WriteValue(Nil)
+			if err != nil {
+				return err
+			}
+		case pushNil:
+			stack.Push(Nil)
 		case pushIter:
 			value := stack.Pop()
 			iter, err := value.Iter()
@@ -434,12 +455,12 @@ func evalCall(c *Context, stack *valueStack, instr Instr, wr ValueWriter) (err e
 	return value.Call(Args{args}, wr)
 }
 
-func evalCallDyn(c *Context, stack *valueStack, instr Instr, wr ValueWriter) (err error) {
+func evalCallDyn(stack *valueStack, instr Instr, wr ValueWriter) (err error) {
 	allArgs := stack.PopN(instr.iarg + 1)
 	return allArgs[0].Call(Args{allArgs[1:]}, wr)
 }
 
-func evalCallSubprogNA(c *Context, stack *valueStack, instr Instr, wr ValueWriter) error {
+func evalCallSubprogNA(c *Context, instr Instr, wr ValueWriter) error {
 	c.BeginScope()
 	defer c.EndScope()
 
@@ -470,7 +491,7 @@ func evalSubprog(c *Context, instr Instr) (value Value, err error) {
 	return
 }
 
-func evalCompare(c *Context, stack *valueStack, instr Instr) (value Value, err error) {
+func evalCompare(stack *valueStack, instr Instr) (value Value, err error) {
 	args := stack.PopN(2)
 
 	ok, err := compareValues(args[0], args[1], instr.iarg)
@@ -478,14 +499,14 @@ func evalCompare(c *Context, stack *valueStack, instr Instr) (value Value, err e
 	return
 }
 
-func evalBinaryOP(c *Context, stack *valueStack, instr Instr) (value Value, err error) {
+func evalBinaryOP(stack *valueStack, instr Instr) (value Value, err error) {
 	args := stack.PopN(2)
 
 	value, err = binaryOPValues(args[0], args[1], instr.iarg)
 	return
 }
 
-func evalNumber(c *Context, instr Instr) (value Value) {
+func evalNumber(instr Instr) (value Value) {
 	number, _ := strconv.ParseFloat(instr.sarg, 64) // error was tested during parsing
 	value = NumberValue(number)
 	return

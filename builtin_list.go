@@ -5,46 +5,89 @@ import (
 	"strings"
 )
 
+var listBuiltins = map[string]Value{
+	"map":      FuncValue(BuiltinMap),
+	"filter":   FuncValue(BuiltinFilter),
+	"reversed": FuncValue(BuiltinReversed),
+	"join":     FuncValue(BuiltinJoin),
+	"append":   FuncValue(BuiltinAppend),
+	"extend":   FuncValue(BuiltinExtend),
+	"sorted":   FuncValue(BuiltinSorted),
+	"min":      FuncValue(BuiltinMin),
+	"max":      FuncValue(BuiltinMax),
+	"reduce":   FuncValue(BuiltinReduce),
+}
+
+func AddListBuiltins(c *Context) {
+	for name, value := range listBuiltins {
+		c.Declare(name, value)
+	}
+}
+
 var (
 	mapSelf   = FuncValue(func(args Args) (Value, error) { return args.Get(0), nil })
 	filterAny = FuncValue(func(args Args) (Value, error) { return True, nil })
 )
 
+type mapIter struct {
+	src ValueIter
+	fn  Value
+	idx int
+}
+
+var _ ValueIter = &mapIter{}
+
+func (i *mapIter) Next() (Value, error) {
+	v, err := i.src.Next()
+	if err == nil {
+		v, err = Call(i.fn, []Value{v, NumberValue(i.idx)})
+		i.idx += 1
+	}
+	return v, err
+}
+
 func BuiltinMap(args Args) (Value, error) {
-	values, err := args.Get(0).List()
+	values, err := args.Get(0).Iter()
 	if err != nil {
 		return nil, err
 	}
 	fn := args.GetDefault(1, mapSelf)
-	mapped := make(ListValue, len(values))
-	for i, v := range values {
-		mapped[i], err = Call(fn, []Value{v, NumberValue(i)})
+	return IterValue{&mapIter{src: values, fn: fn}}, nil
+}
+
+type filterIter struct {
+	src ValueIter
+	fn  Value
+}
+
+var _ ValueIter = &filterIter{}
+
+func (i *filterIter) Next() (Value, error) {
+	for {
+		v, err := i.src.Next()
 		if err != nil {
 			return nil, err
 		}
+
+		ok, err := Call(i.fn, []Value{v})
+		if err != nil {
+			return nil, err
+		}
+
+		if ok.Bool() {
+			return v, nil
+		}
 	}
-	return mapped, nil
 }
 
 func BuiltinFilter(args Args) (Value, error) {
-	values, err := args.Get(0).List()
+	values, err := args.Get(0).Iter()
 	if err != nil {
 		return nil, err
 	}
 	fn := args.GetDefault(1, filterAny)
 
-	filtered := []Value{}
-	for _, value := range values {
-		ok, err := Call(fn, []Value{value})
-		if err != nil {
-			return nil, err
-		}
-		if ok.Bool() {
-			filtered = append(filtered, value)
-		}
-	}
-
-	return ListValue(filtered), nil
+	return IterValue{&filterIter{src: values, fn: fn}}, nil
 }
 
 func BuiltinReversed(args Args) (Value, error) {
@@ -157,22 +200,96 @@ func BuiltinSorted(args Args) (Value, error) {
 	return ListValue(sorted), s.err
 }
 
-var (
-	bMap      Value = FuncValue(BuiltinMap)
-	bFilter   Value = FuncValue(BuiltinFilter)
-	bReversed Value = FuncValue(BuiltinReversed)
-	bJoin     Value = FuncValue(BuiltinJoin)
-	bAppend   Value = FuncValue(BuiltinAppend)
-	bExtend   Value = FuncValue(BuiltinExtend)
-	bSorted   Value = FuncValue(BuiltinSorted)
-)
+func reduceIter(values ValueIter, fn func(Value, Value) (Value, error)) (Value, error) {
+	value, err := values.Next()
+	if err != nil {
+		if err == ErrIterExhausted {
+			return Nil, nil
+		}
+		return nil, err
+	}
 
-func AddListBuiltins(c *Context) {
-	c.Declare("map", bMap)
-	c.Declare("filter", bFilter)
-	c.Declare("reversed", bReversed)
-	c.Declare("join", bJoin)
-	c.Declare("append", bAppend)
-	c.Declare("extend", bExtend)
-	c.Declare("sorted", bSorted)
+	for {
+		next, err := values.Next()
+		if err != nil {
+			if err == ErrIterExhausted {
+				err = nil
+			}
+			return value, err
+		}
+
+		value, err = fn(value, next)
+		if err != nil {
+			return value, err
+		}
+	}
+}
+
+func reduceArgs(args Args, fn func(Value, Value) (Value, error)) (v Value, err error) {
+	var values ValueIter
+
+	switch args.Len() {
+	case 0:
+		return Nil, nil
+	case 1:
+		values, err = args.Get(0).Iter()
+		if err != nil {
+			return
+		}
+	default:
+		values = &listIter{args.All()}
+	}
+
+	return reduceIter(values, fn)
+}
+
+func reduceNumbers(fn func(n1, n2 float64) (Value, error)) func(v1, v2 Value) (Value, error) {
+	return func(v1, v2 Value) (Value, error) {
+		n1, err := v1.Number()
+		if err != nil {
+			return nil, err
+		}
+		n2, err := v2.Number()
+		if err != nil {
+			return nil, err
+		}
+		return fn(n1, n2)
+	}
+}
+
+func BuiltinMax(args Args) (v Value, err error) {
+	return reduceArgs(args, reduceNumbers(func(n1, n2 float64) (Value, error) {
+		var max float64
+		if n1 >= n2 {
+			max = n1
+		} else {
+			max = n2
+		}
+		return NumberValue(max), nil
+	}))
+}
+
+func BuiltinMin(args Args) (v Value, err error) {
+	return reduceArgs(args, reduceNumbers(func(n1, n2 float64) (Value, error) {
+		var max float64
+		if n1 <= n2 {
+			max = n1
+		} else {
+			max = n2
+		}
+		return NumberValue(max), nil
+	}))
+}
+
+func BuiltinReduce(args Args) (v Value, err error) {
+	values, err := args.Get(0).Iter()
+	if err != nil {
+		return nil, err
+	}
+
+	fn := args.Get(1)
+
+	return reduceIter(values, func(v1, v2 Value) (Value, error) {
+		return Call(fn, []Value{v1, v2})
+	})
 }

@@ -37,6 +37,8 @@ const (
 	pushBinaryOP
 	emitNumber
 	pushNumber
+	emitNil
+	pushNil
 	pushIter
 	iterNextOrJump
 	discardIter
