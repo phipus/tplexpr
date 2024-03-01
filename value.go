@@ -551,14 +551,15 @@ type subprogValue struct {
 var _ Value = &subprogValue{}
 
 func (s *subprogValue) eval(args Args, wr ValueWriter) error {
-	s.ctx.BeginScope()
-	defer s.ctx.EndScope()
+	ctx := s.ctx.Clone()
+	ctx.BeginScope()
+	defer ctx.EndScope()
 
 	for i, argName := range s.args {
-		s.ctx.Declare(argName, args.Get(i))
+		ctx.Declare(argName, args.Get(i))
 	}
 
-	return EvalRaw(s.ctx, s.code, wr)
+	return EvalRaw(ctx, s.code, wr)
 }
 
 func (s *subprogValue) evalString(args Args) (string, error) {

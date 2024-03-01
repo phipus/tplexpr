@@ -3,6 +3,7 @@ package tplexpr
 import (
 	"io"
 	"io/fs"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,7 @@ type watchFile struct {
 }
 
 type watchStore struct {
+	mux         sync.Mutex
 	plugins     []Plugin
 	files       []storeFS
 	parsed      bool
@@ -99,13 +101,21 @@ func (s *watchStore) parse() error {
 	return nil
 }
 
-func (s *watchStore) Render(w io.Writer, name string, vars Vars) error {
+func (s *watchStore) updateWatchedFiles() error {
+	s.mux.Lock()
+	defer s.mux.Unlock()
 	if !s.parsed || s.isExpired() {
 		s.parsed = false
 		err := s.parse()
-		if err != nil {
-			return err
-		}
+		return err
+	}
+	return nil
+}
+
+func (s *watchStore) Render(w io.Writer, name string, vars Vars) error {
+	err := s.updateWatchedFiles()
+	if err != nil {
+		return err
 	}
 	return s.c.EvalTemplateWriter(name, vars, w)
 }

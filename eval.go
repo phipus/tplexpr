@@ -487,7 +487,7 @@ func evalAttr(c *Context, stack *valueStack, instr Instr) (value Value, err erro
 func evalSubprog(c *Context, instr Instr) (value Value, err error) {
 	subprog := c.subprogs[instr.iarg]
 	ctx := c.Clone()
-	value = &subprogValue{subprog.Code, subprog.Args, ctx}
+	value = &subprogValue{subprog.Code, subprog.Args, ctx.Clone()}
 	return
 }
 
