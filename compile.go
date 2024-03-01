@@ -301,7 +301,7 @@ func compileNodes(ctx *CompileContext, nodes []Node, mode int) error {
 	case CompilePush:
 		subprog, err := ctx.WithSubprog(nil, func() error {
 			for _, node := range nodes {
-				err := node.Compile(ctx, mode)
+				err := node.Compile(ctx, CompileEmit)
 				if err != nil {
 					return err
 				}

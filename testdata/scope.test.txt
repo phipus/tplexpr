@@ -1,0 +1,6 @@
+${declare(x, 1)}
+${block(f, x)}$x${endblock}
+$x
+${f(2)}
+${f(3)}
+$x
