@@ -580,7 +580,7 @@ func (n *ForNode) compileEmit(ctx *CompileContext) error {
 	ctx.pushInstr(jump, nextIndex-len(ctx.code)-1, "")
 	endIndex := len(ctx.code)
 	ctx.code[nextIndex].iarg = endIndex - nextIndex - 1
-
+	ctx.pushInstr(discardIter, 0, "")
 	ctx.EndScope()
 
 	// update the loop labels

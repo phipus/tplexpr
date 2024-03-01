@@ -4,3 +4,6 @@ $x
 ${f(2)}
 ${f(3)}
 $x
+
+${for j in range(5) do j endfor}
+empty: $j

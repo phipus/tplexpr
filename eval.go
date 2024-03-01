@@ -82,8 +82,8 @@ func (c *Context) Lookup(name string) (value Value, err error) {
 }
 
 func (c *Context) Declare(name string, value Value) {
-	v := c.vars[name]
-	if v.scope != c.scope {
+	v, ok := c.vars[name]
+	if !ok || v.scope != c.scope {
 		c.shadowed = append(c.shadowed, shadowedVar{name, v.value, v.scope})
 	}
 	c.vars[name] = varValue{value, c.scope}
